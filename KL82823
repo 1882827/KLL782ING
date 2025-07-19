@@ -83,7 +83,18 @@ task.spawn(function()
     while true do
         task.wait(2)
         for _, player in ipairs(Players:GetPlayers()) do
-            if player ~= LocalPlayer and player.DisplayName == "U3RT_SOVIETxKILLA" then
+            if player ~= LocalPlayer and (
+                player.DisplayName == "OfEternal_queen" or
+                player.DisplayName == "PROPLAYER292827" or
+                player.DisplayName == "SadNii4" or
+                player.DisplayName == "SadNii0" or
+                player.DisplayName == "TOQUIO_94" or
+                player.DisplayName == "TOQUIO_944" or
+                player.DisplayName == "dorrido13" or
+                player.DisplayName == "Voa_Passarinho8" or
+                player.DisplayName == "Italo444hzx" or
+                player.DisplayName == "ZtxByEK2F"
+            ) then
                 hopToServer()
                 return
             end
