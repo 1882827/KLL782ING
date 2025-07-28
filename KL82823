@@ -221,3 +221,14 @@ local function AntiLagFull()
 end
 
 AntiLagFull()
+
+task.spawn(function()
+    while true do
+        task.wait(0.2)
+        local char = LocalPlayer.Character
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        if root then
+            root.Anchored = true
+        end
+    end
+end)
