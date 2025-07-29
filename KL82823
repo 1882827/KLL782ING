@@ -250,3 +250,32 @@ task.spawn(function()
 
     StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, false)
 end)
+
+task.spawn(function()
+    local Players = game:GetService("Players")
+    local RunService = game:GetService("RunService")
+
+    local LocalPlayer = Players.LocalPlayer
+    local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+    local HRP = Character:WaitForChild("HumanoidRootPart")
+
+    LocalPlayer.CharacterAdded:Connect(function(char)
+        Character = char
+        HRP = char:WaitForChild("HumanoidRootPart")
+    end)
+
+    _G.lockPosition = true
+
+    local lastPos
+    RunService.Heartbeat:Connect(function()
+        if _G.lockPosition and HRP then
+            if not lastPos then
+                lastPos = HRP.Position
+            else
+                HRP.Velocity = Vector3.zero
+                HRP.RotVelocity = Vector3.zero
+                HRP.CFrame = CFrame.new(lastPos)
+            end
+        end
+    end)
+end)
