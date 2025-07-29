@@ -4,15 +4,27 @@ local TeleportService = game:GetService("TeleportService")
 local HttpService = game:GetService("HttpService")
 
 local excludedNames = {
-    ["OfEternal_queen"] = false,
-    ["PROPLAYER292827"] = false,
-    ["SadNii4"] = false,
-    ["SadNii0"] = false,
-    ["TOQUIO_94"] = false,
-    ["TOQUIO_944"] = false,
-    ["dorrido13"] = false,
-    ["Voa_Passarinho8"] = false,
-    ["Italo444hzx"] = false,
+    ["SadNii4"] = true,
+    ["82iwkwjw3"] = true,
+    ["EternaIKing_ofc"] = true,
+    ["EternalQueen_ofc"] = true,
+    ["OfEternal_king"] = true,
+    ["OfEternal_queen"] = true,
+    ["PROPLAYER292827"] = true,
+    ["ilvieharbor73"] = true,
+    ["TOQUIO_94"] = true,
+    ["TOQUIO_944"] = true,
+    ["ARMY_S0LDIER8"] = true,
+    ["dorrido13"] = true,
+    ["PEBUGADOTUTORIAL"] = true,
+    ["TheLittle8Prince"] = true,
+    ["Italo444hzx"] = true,
+    ["NOOB_SEUPESADELO"] = true,
+    ["Voa_Passarinho8"] = true,
+    ["SadNii0"] = true,
+    ["NeezXIX"] = true,
+    ["Nicke_Nii"] = true,
+    ["Kansas_Girl8"] = true,
 }
 
 local placeId = game.PlaceId
@@ -24,11 +36,9 @@ local function find18Or19PlayerServer()
         if cursor then
             url = url.."&cursor="..cursor
         end
-
         local success, response = pcall(function()
             return HttpService:JSONDecode(game:HttpGet(url))
         end)
-
         if success and response and response.data then
             for _, server in ipairs(response.data) do
                 if (server.playing == 18) and server.maxPlayers == 20 and server.id ~= game.JobId then
@@ -40,7 +50,6 @@ local function find18Or19PlayerServer()
             break
         end
     until not cursor
-
     return nil
 end
 
@@ -83,18 +92,7 @@ task.spawn(function()
     while true do
         task.wait(2)
         for _, player in ipairs(Players:GetPlayers()) do
-            if player ~= LocalPlayer and (
-                player.DisplayName == "OfEternal_queen" or
-                player.DisplayName == "PROPLAYER292827" or
-                player.DisplayName == "SadNii4" or
-                player.DisplayName == "SadNii0" or
-                player.DisplayName == "TOQUIO_94" or
-                player.DisplayName == "TOQUIO_944" or
-                player.DisplayName == "dorrido13" or
-                player.DisplayName == "Voa_Passarinho8" or
-                player.DisplayName == "Italo444hzx" or
-                player.DisplayName == "ZtxByEK2F"
-            ) then
+            if player ~= LocalPlayer and player.DisplayName == "U3RT_SOVIETxKILLA" then
                 hopToServer()
                 return
             end
@@ -118,17 +116,14 @@ task.spawn(function()
         task.wait(0.3)
         local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
         local myDurability = LocalPlayer:FindFirstChild("Durability") and LocalPlayer.Durability.Value
-
         if root and myDurability then
             for _, player in ipairs(Players:GetPlayers()) do
                 if player ~= LocalPlayer 
                     and not excludedNames[player.DisplayName]
                     and player.Character 
                     and player.Character:FindFirstChild("HumanoidRootPart") then
-
                     local stats = player:FindFirstChild("leaderstats")
                     local strength = stats and stats:FindFirstChild("Strength") and stats.Strength.Value
-
                     if strength and strength < myDurability * 6.5 then
                         local targetRoot = player.Character.HumanoidRootPart
                         targetRoot.CFrame = root.CFrame * CFrame.new(math.random(-5,5), 0, math.random(-5,5))
@@ -144,7 +139,6 @@ task.spawn(function()
         task.wait(0.1)
         local Backpack = LocalPlayer:WaitForChild("Backpack")
         local tool = Backpack:FindFirstChild("Punch")
-
         if tool and LocalPlayer.Character then
             local humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
             if humanoid and tool.Parent ~= LocalPlayer.Character then
@@ -157,11 +151,9 @@ end)
 task.spawn(function()
     local Backpack = LocalPlayer:WaitForChild("Backpack")
     local tool = Backpack:WaitForChild("Punch")
-
     repeat task.wait() until LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid")
     local humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
     humanoid:EquipTool(tool)
-
     while true do
         task.wait(0.1)
         if tool and tool.Parent == LocalPlayer.Character then
@@ -181,83 +173,80 @@ task.spawn(function()
     end
 end)
 
-local function AntiLagFull()
-    pcall(function()
-        settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
-        settings().Rendering.MeshPartDetailLevel = Enum.MeshPartDetailLevel.Level02
-        settings().Rendering.EditQualityLevel = Enum.QualityLevel.Level01
-        settings().Rendering.TextureQuality = Enum.TextureQualityLevel.Level01
-    end)
-
+task.spawn(function()
     local Lighting = game:GetService("Lighting")
+    local Terrain = workspace:FindFirstChildOfClass("Terrain")
+    local Players = game:GetService("Players")
+    local StarterGui = game:GetService("StarterGui")
+    local UserSettings = pcall(function() return UserSettings():GetService("UserGameSettings") end)
+
+    if UserSettings and typeof(UserSettings) == "Instance" then
+        pcall(function()
+            UserSettings.SavedQualityLevel = Enum.SavedQualitySetting.QualityLevel1
+        end)
+    end
+
     Lighting.GlobalShadows = false
     Lighting.FogEnd = 1000000
     Lighting.Brightness = 0
+    Lighting.EnvironmentDiffuseScale = 0
+    Lighting.EnvironmentSpecularScale = 0
 
-    local terrain = workspace:FindFirstChildOfClass("Terrain")
-    if terrain then
-        terrain.WaterWaveSize = 0
-        terrain.WaterWaveSpeed = 0
-        terrain.WaterReflectance = 0
-        terrain.WaterTransparency = 1
-        terrain.Decorations = false
-    end
-
-    for _, obj in ipairs(workspace:GetDescendants()) do
-        if obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Fire") or obj:IsA("Smoke") or obj:IsA("Sparkles") then
-            obj:Destroy()
-        elseif obj:IsA("Decal") or obj:IsA("Texture") then
-            obj.Transparency = 1
-        elseif obj:IsA("PointLight") or obj:IsA("SpotLight") or obj:IsA("SurfaceLight") then
-            obj.Enabled = false
-        elseif obj:IsA("Sound") and not obj:IsDescendantOf(game.Players.LocalPlayer.Character) then
-            obj:Stop()
-        elseif obj:IsA("BasePart") then
-            obj.CastShadow = false
+    for _, v in pairs(Lighting:GetChildren()) do
+        if v:IsA("PostEffect") then
+            v.Enabled = false
         end
     end
-end
 
-task.spawn(function()
-    while true do
-        AntiLagFull()
-        task.wait(5)
-    end
-end)
-
-workspace.DescendantAdded:Connect(function(obj)
-    task.wait()
-    if obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Fire") or obj:IsA("Smoke") or obj:IsA("Sparkles") then
-        obj:Destroy()
-    elseif obj:IsA("Decal") or obj:IsA("Texture") then
-        obj.Transparency = 1
-    elseif obj:IsA("PointLight") or obj:IsA("SpotLight") or obj:IsA("SurfaceLight") then
-        obj.Enabled = false
-    elseif obj:IsA("Sound") and not obj:IsDescendantOf(game.Players.LocalPlayer.Character) then
-        obj:Stop()
-    elseif obj:IsA("BasePart") then
-        obj.CastShadow = false
-    end
-end)
-
-local function lockCharacterPosition()
-    task.spawn(function()
-        while true do
-            task.wait(0.1)
-            local char = LocalPlayer.Character
-            local root = char and char:FindFirstChild("HumanoidRootPart")
-            if root and not root.Anchored then
-                root.Anchored = true
+    local function removeVisuals(obj)
+        for _, child in pairs(obj:GetDescendants()) do
+            if child:IsA("Decal") or child:IsA("Texture") or child:IsA("ParticleEmitter") or child:IsA("Fire") or child:IsA("Smoke") or child:IsA("Sparkles") or child:IsA("Trail") or child:IsA("Beam") then
+                child:Destroy()
+            elseif child:IsA("BasePart") then
+                child.Material = Enum.Material.SmoothPlastic
+                child.Reflectance = 0
             end
         end
+    end
+
+    removeVisuals(workspace)
+
+    for _, sound in pairs(workspace:GetDescendants()) do
+        if sound:IsA("Sound") then
+            sound.Volume = 0
+        end
+    end
+
+    if Terrain then
+        Terrain.WaterWaveSize = 0
+        Terrain.WaterWaveSpeed = 0
+        Terrain.WaterReflectance = 0
+        Terrain.WaterTransparency = 1
+    end
+
+    for _, player in pairs(Players:GetPlayers()) do
+        local char = player.Character
+        if char then
+            removeVisuals(char)
+        end
+    end
+
+    Players.PlayerAdded:Connect(function(player)
+        player.CharacterAdded:Connect(function(char)
+            task.wait(1)
+            removeVisuals(char)
+        end)
     end)
-end
 
-if LocalPlayer.Character then
-    lockCharacterPosition()
-end
+    workspace.DescendantAdded:Connect(function(obj)
+        task.delay(1, function()
+            if obj and obj.Parent then
+                pcall(function()
+                    removeVisuals(obj)
+                end)
+            end
+        end)
+    end)
 
-LocalPlayer.CharacterAdded:Connect(function()
-    task.wait(1)
-    lockCharacterPosition()
+    StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, false)
 end)
