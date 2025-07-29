@@ -182,10 +182,26 @@ task.spawn(function()
 end)
 
 local function AntiLagFull()
-    settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
-    settings().Rendering.MeshPartDetailLevel = Enum.MeshPartDetailLevel.Level02
-    settings().Rendering.EditQualityLevel = Enum.QualityLevel.Level01
-    settings().Rendering.TextureQuality = Enum.TextureQualityLevel.Level01
+    pcall(function()
+        settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
+        settings().Rendering.MeshPartDetailLevel = Enum.MeshPartDetailLevel.Level02
+        settings().Rendering.EditQualityLevel = Enum.QualityLevel.Level01
+        settings().Rendering.TextureQuality = Enum.TextureQualityLevel.Level01
+    end)
+
+    local Lighting = game:GetService("Lighting")
+    Lighting.GlobalShadows = false
+    Lighting.FogEnd = 1000000
+    Lighting.Brightness = 0
+
+    local terrain = workspace:FindFirstChildOfClass("Terrain")
+    if terrain then
+        terrain.WaterWaveSize = 0
+        terrain.WaterWaveSpeed = 0
+        terrain.WaterReflectance = 0
+        terrain.WaterTransparency = 1
+        terrain.Decorations = false
+    end
 
     for _, obj in ipairs(workspace:GetDescendants()) do
         if obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Fire") or obj:IsA("Smoke") or obj:IsA("Sparkles") then
@@ -196,39 +212,52 @@ local function AntiLagFull()
             obj.Enabled = false
         elseif obj:IsA("Sound") and not obj:IsDescendantOf(game.Players.LocalPlayer.Character) then
             obj:Stop()
-        end
-    end
-
-    local Lighting = game:GetService("Lighting")
-    Lighting.GlobalShadows = false
-    Lighting.FogEnd = 1000000
-    Lighting.Brightness = 0
-
-    if workspace:FindFirstChildOfClass("Terrain") then
-        local terrain = workspace:FindFirstChildOfClass("Terrain")
-        terrain.WaterWaveSize = 0
-        terrain.WaterWaveSpeed = 0
-        terrain.WaterReflectance = 0
-        terrain.WaterTransparency = 1
-        terrain.Decorations = false
-    end
-
-    for _, part in ipairs(workspace:GetDescendants()) do
-        if part:IsA("BasePart") then
-            part.CastShadow = false
+        elseif obj:IsA("BasePart") then
+            obj.CastShadow = false
         end
     end
 end
 
-AntiLagFull()
-
 task.spawn(function()
     while true do
-        task.wait(0.2)
-        local char = LocalPlayer.Character
-        local root = char and char:FindFirstChild("HumanoidRootPart")
-        if root then
-            root.Anchored = true
-        end
+        AntiLagFull()
+        task.wait(5)
     end
+end)
+
+workspace.DescendantAdded:Connect(function(obj)
+    task.wait()
+    if obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Fire") or obj:IsA("Smoke") or obj:IsA("Sparkles") then
+        obj:Destroy()
+    elseif obj:IsA("Decal") or obj:IsA("Texture") then
+        obj.Transparency = 1
+    elseif obj:IsA("PointLight") or obj:IsA("SpotLight") or obj:IsA("SurfaceLight") then
+        obj.Enabled = false
+    elseif obj:IsA("Sound") and not obj:IsDescendantOf(game.Players.LocalPlayer.Character) then
+        obj:Stop()
+    elseif obj:IsA("BasePart") then
+        obj.CastShadow = false
+    end
+end)
+
+local function lockCharacterPosition()
+    task.spawn(function()
+        while true do
+            task.wait(0.1)
+            local char = LocalPlayer.Character
+            local root = char and char:FindFirstChild("HumanoidRootPart")
+            if root and not root.Anchored then
+                root.Anchored = true
+            end
+        end
+    end)
+end
+
+if LocalPlayer.Character then
+    lockCharacterPosition()
+end
+
+LocalPlayer.CharacterAdded:Connect(function()
+    task.wait(1)
+    lockCharacterPosition()
 end)
