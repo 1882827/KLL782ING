@@ -89,16 +89,20 @@ end)
 
 task.spawn(function()
     while true do
-        task.wait(0.25)
-        local Backpack = LocalPlayer:FindFirstChild("Backpack")
-        local tool = Backpack and Backpack:FindFirstChild("Punch")
+        task.wait()
         local char = LocalPlayer.Character
+        local Backpack = LocalPlayer:FindFirstChild("Backpack")
         local humanoid = char and char:FindFirstChildOfClass("Humanoid")
-        if tool and humanoid and tool.Parent ~= char then
-            humanoid:EquipTool(tool)
-        end
-        if tool and tool.Parent == char then
-            tool:Activate()
+        local tool = (char and char:FindFirstChild("Punch")) or (Backpack and Backpack:FindFirstChild("Punch"))
+
+        if humanoid and tool then
+            if tool.Parent ~= char then
+                humanoid:EquipTool(tool)
+                task.wait(0.05)
+            end
+            pcall(function()
+                tool:Activate()
+            end)
         end
     end
 end)
