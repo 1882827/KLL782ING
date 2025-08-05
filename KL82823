@@ -4,25 +4,27 @@ local TeleportService = game:GetService("TeleportService")
 local HttpService = game:GetService("HttpService")
 local Lighting = game:GetService("Lighting")
 local RunService = game:GetService("RunService")
-local StarterGui = game:GetService("StarterGui")
 
 local placeId = game.PlaceId
 local excludedNames = {
-    ["U3RT_SOVIETxKILLA"] = false,
-    ["U3RT_KILLAxSOVIET"] = false,
+    ["Nii_OZ"] = false,
+    ["VTBR_VoaPassarinho8"] = false,
 }
 local ServerHopCooldown = false
+
+local function waitForStats()
+    repeat task.wait() until LocalPlayer:FindFirstChild("Durability")
+    repeat task.wait() until LocalPlayer:FindFirstChild("leaderstats")
+end
+waitForStats()
 
 local function find18PlayerServer()
     local cursor = nil
     repeat
-        local url = "https://games.roblox.com/v1/games/" .. placeId .. "/servers/Public?sortOrder=Desc&limit=100"
-        if cursor then url = url .. "&cursor=" .. cursor end
-
+        local url = "https://games.roblox.com/v1/games/"..placeId.."/servers/Public?sortOrder=Desc&limit=100"..(cursor and "&cursor="..cursor or "")
         local success, result = pcall(function()
             return HttpService:JSONDecode(game:HttpGet(url))
         end)
-
         if success and result and result.data then
             for _, server in ipairs(result.data) do
                 if server.playing == 18 and server.maxPlayers == 20 and server.id ~= game.JobId then
@@ -39,9 +41,9 @@ end
 local function hopToServer()
     if ServerHopCooldown then return end
     ServerHopCooldown = true
-    local serverId = find18PlayerServer()
-    if serverId then
-        TeleportService:TeleportToPlaceInstance(placeId, serverId, LocalPlayer)
+    local id = find18PlayerServer()
+    if id then
+        TeleportService:TeleportToPlaceInstance(placeId, id, LocalPlayer)
     else
         task.delay(5, function() ServerHopCooldown = false end)
     end
@@ -69,17 +71,14 @@ task.spawn(function()
         task.wait()
         local char = LocalPlayer.Character
         local Backpack = LocalPlayer:FindFirstChild("Backpack")
-        local humanoid = char and char:FindFirstChildOfClass("Humanoid")
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
         local tool = (char and char:FindFirstChild("Punch")) or (Backpack and Backpack:FindFirstChild("Punch"))
-
-        if humanoid and tool then
+        if hum and tool then
             if tool.Parent ~= char then
-                humanoid:EquipTool(tool)
+                hum:EquipTool(tool)
                 task.wait(0.05)
             end
-            pcall(function()
-                tool:Activate()
-            end)
+            pcall(function() tool:Activate() end)
         end
     end
 end)
@@ -87,19 +86,19 @@ end)
 task.spawn(function()
     while true do
         task.wait(1)
-        local myChar = LocalPlayer.Character
-        local myDurability = LocalPlayer:FindFirstChild("Durability") and LocalPlayer.Durability.Value
-        local root = myChar and myChar:FindFirstChild("HumanoidRootPart")
-        if not (myDurability and root) then continue end
+        local char = LocalPlayer.Character
+        local durability = LocalPlayer:FindFirstChild("Durability") and LocalPlayer.Durability.Value
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        if not (durability and root) then continue end
 
         for _, player in ipairs(Players:GetPlayers()) do
             if player ~= LocalPlayer and not excludedNames[player.DisplayName] then
-                local targetChar = player.Character
                 local stats = player:FindFirstChild("leaderstats")
                 local strength = stats and stats:FindFirstChild("Strength") and stats.Strength.Value
-                local targetRoot = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
-                if strength and targetRoot and strength < myDurability * 6.5 then
-                    targetRoot.CFrame = root.CFrame * CFrame.new(math.random(-5,5), 0, math.random(-5,5))
+                local tChar = player.Character
+                local tRoot = tChar and tChar:FindFirstChild("HumanoidRootPart")
+                if strength and tRoot and strength < durability * 6.5 and tRoot.Anchored == false then
+                    tRoot.CFrame = root.CFrame * CFrame.new(math.random(-5, 5), 0, math.random(-5, 5))
                 end
             end
         end
@@ -109,7 +108,7 @@ end)
 RunService.Heartbeat:Connect(function()
     local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
     if root then
-        root.CFrame = root.CFrame * CFrame.Angles(0, math.rad(5), 0)
+        root.CFrame *= CFrame.Angles(0, math.rad(5), 0)
     end
 end)
 
@@ -126,54 +125,54 @@ RunService.Heartbeat:Connect(function()
 end)
 
 task.spawn(function()
-    local function clearVisuals(obj)
-        for _, v in ipairs(obj:GetDescendants()) do
-            if v:IsA("Decal") or v:IsA("Texture") or v:IsA("ParticleEmitter")
-            or v:IsA("Fire") or v:IsA("Smoke") or v:IsA("Sparkles")
-            or v:IsA("Trail") or v:IsA("Beam") or v:IsA("ShirtGraphic")
-            or v:IsA("Accessory") or v:IsA("Clothing") or v:IsA("ForceField") then
-                pcall(function() v:Destroy() end)
-            elseif v:IsA("BasePart") then
-                v.Material = Enum.Material.SmoothPlastic
-                v.Reflectance = 0
-                v.CastShadow = false
-            elseif v:IsA("Sound") then
-                v.Volume = 0
-            end
+    for _, gui in pairs(LocalPlayer:WaitForChild("PlayerGui"):GetChildren()) do
+        if gui:IsA("ScreenGui") then gui:Destroy() end
+    end
+
+    for _, v in pairs(Lighting:GetChildren()) do
+        if v:IsA("Sky") then v:Destroy() end
+    end
+
+    local darkSky = Instance.new("Sky")
+    darkSky.Name = "DarkSky"
+    for _, face in ipairs({"Bk", "Dn", "Ft", "Lf", "Rt", "Up"}) do
+        darkSky["Skybox"..face] = "rbxassetid://0"
+    end
+    darkSky.Parent = Lighting
+
+    local function applyDark()
+        Lighting.Brightness = 0
+        Lighting.ClockTime = 0
+        Lighting.TimeOfDay = "00:00:00"
+        Lighting.OutdoorAmbient = Color3.new(0, 0, 0)
+        Lighting.Ambient = Color3.new(0, 0, 0)
+        Lighting.FogColor = Color3.new(0, 0, 0)
+        Lighting.FogEnd = 100
+    end
+    applyDark()
+
+    task.spawn(function()
+        while true do
+            task.wait(5)
+            if not Lighting:FindFirstChild("DarkSky") then darkSky:Clone().Parent = Lighting end
+            applyDark()
+        end
+    end)
+
+    for _, obj in pairs(workspace:GetDescendants()) do
+        if obj:IsA("ParticleEmitter") or obj:IsA("PointLight") or obj:IsA("SpotLight") or obj:IsA("SurfaceLight") then
+            obj:Destroy()
         end
     end
+end)
 
-    Lighting.GlobalShadows = false
-    Lighting.FogEnd = 1e9
-    Lighting.Brightness = 0
-    Lighting.ClockTime = 14
-    for _, v in pairs(Lighting:GetDescendants()) do
-        if v:IsA("PostEffect") then v.Enabled = false end
-    end
-
-    clearVisuals(workspace)
+task.delay(20, function()
     for _, p in ipairs(Players:GetPlayers()) do
-        if p.Character then clearVisuals(p.Character) end
+        if p ~= LocalPlayer and not excludedNames[p.DisplayName] and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+            return
+        end
     end
-
-    Players.PlayerAdded:Connect(function(p)
-        p.CharacterAdded:Connect(function(c)
-            task.wait(1)
-            clearVisuals(c)
-        end)
-    end)
-
-    workspace.DescendantAdded:Connect(function(obj)
-        task.delay(0.3, function()
-            if obj:IsDescendantOf(workspace) then
-                clearVisuals(obj)
-            end
-        end)
-    end)
-
-    for _, gui in ipairs(Enum.CoreGuiType:GetEnumItems()) do
-        pcall(function() StarterGui:SetCoreGuiEnabled(gui, false) end)
-    end
+    hopToServer()
 end)
 
 task.spawn(function()
