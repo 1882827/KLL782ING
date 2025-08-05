@@ -188,3 +188,14 @@ task.spawn(function()
 end)
 
 task.delay(45, hopToServer)
+
+task.spawn(function()
+    while true do
+        task.wait(5)
+        local totalPlayers = #Players:GetPlayers()
+        if totalPlayers <= 10 then
+            hopToServer()
+            return
+        end
+    end
+end)
