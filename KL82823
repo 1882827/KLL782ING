@@ -6,29 +6,35 @@ local Lighting = game:GetService("Lighting")
 local RunService = game:GetService("RunService")
 
 local placeId = game.PlaceId
+local ServerHopCooldown = false
 local excludedNames = {
     ["Nii_OZ"] = false,
     ["VTBR_VoaPassarinho8"] = false,
 }
-local ServerHopCooldown = false
 
-local function waitForStats()
-    repeat task.wait() until LocalPlayer:FindFirstChild("Durability")
-    repeat task.wait() until LocalPlayer:FindFirstChild("leaderstats")
-end
-waitForStats()
+TeleportService.TeleportInitFailed:Connect(function(_, _, _)
+    task.delay(3, function()
+        ServerHopCooldown = false
+    end)
+end)
 
 local function find18PlayerServer()
     local cursor = nil
     repeat
-        local url = "https://games.roblox.com/v1/games/"..placeId.."/servers/Public?sortOrder=Desc&limit=100"..(cursor and "&cursor="..cursor or "")
+        local url = string.format(
+            "https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Desc&limit=100%s",
+            placeId,
+            cursor and "&cursor="..cursor or ""
+        )
         local success, result = pcall(function()
             return HttpService:JSONDecode(game:HttpGet(url))
         end)
         if success and result and result.data then
             for _, server in ipairs(result.data) do
-                if server.playing == 18 and server.maxPlayers == 20 and server.id ~= game.JobId then
-                    return server.id
+                if server.id ~= game.JobId and server.maxPlayers == 20 then
+                    if server.playing == 18 then
+                        return server.id
+                    end
                 end
             end
             cursor = result.nextPageCursor
@@ -41,13 +47,28 @@ end
 local function hopToServer()
     if ServerHopCooldown then return end
     ServerHopCooldown = true
-    local id = find18PlayerServer()
-    if id then
-        TeleportService:TeleportToPlaceInstance(placeId, id, LocalPlayer)
-    else
-        task.delay(5, function() ServerHopCooldown = false end)
-    end
+    task.spawn(function()
+        local targetServer = find18PlayerServer()
+        if not targetServer then
+            ServerHopCooldown = false
+            return
+        end
+        local success = pcall(function()
+            TeleportService:TeleportToPlaceInstance(placeId, targetServer, LocalPlayer)
+        end)
+        if not success then
+            task.delay(3, function()
+                ServerHopCooldown = false
+            end)
+        end
+    end)
 end
+
+local function waitForStats()
+    repeat task.wait() until LocalPlayer:FindFirstChild("Durability")
+    repeat task.wait() until LocalPlayer:FindFirstChild("leaderstats")
+end
+waitForStats()
 
 local function setupDiedListener(character)
     local hum = character:FindFirstChildOfClass("Humanoid")
@@ -55,7 +76,6 @@ local function setupDiedListener(character)
         hum.Died:Connect(hopToServer)
     end
 end
-
 if LocalPlayer.Character then setupDiedListener(LocalPlayer.Character) end
 LocalPlayer.CharacterAdded:Connect(setupDiedListener)
 
@@ -90,7 +110,6 @@ task.spawn(function()
         local durability = LocalPlayer:FindFirstChild("Durability") and LocalPlayer.Durability.Value
         local root = char and char:FindFirstChild("HumanoidRootPart")
         if not (durability and root) then continue end
-
         for _, player in ipairs(Players:GetPlayers()) do
             if player ~= LocalPlayer and not excludedNames[player.DisplayName] then
                 local stats = player:FindFirstChild("leaderstats")
@@ -102,13 +121,6 @@ task.spawn(function()
                 end
             end
         end
-    end
-end)
-
-RunService.Heartbeat:Connect(function()
-    local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-    if root then
-        root.CFrame *= CFrame.Angles(0, math.rad(5), 0)
     end
 end)
 
@@ -128,18 +140,15 @@ task.spawn(function()
     for _, gui in pairs(LocalPlayer:WaitForChild("PlayerGui"):GetChildren()) do
         if gui:IsA("ScreenGui") then gui:Destroy() end
     end
-
     for _, v in pairs(Lighting:GetChildren()) do
         if v:IsA("Sky") then v:Destroy() end
     end
-
     local darkSky = Instance.new("Sky")
     darkSky.Name = "DarkSky"
     for _, face in ipairs({"Bk", "Dn", "Ft", "Lf", "Rt", "Up"}) do
         darkSky["Skybox"..face] = "rbxassetid://0"
     end
     darkSky.Parent = Lighting
-
     local function applyDark()
         Lighting.Brightness = 0
         Lighting.ClockTime = 0
@@ -150,7 +159,6 @@ task.spawn(function()
         Lighting.FogEnd = 100
     end
     applyDark()
-
     task.spawn(function()
         while true do
             task.wait(5)
@@ -158,7 +166,6 @@ task.spawn(function()
             applyDark()
         end
     end)
-
     for _, obj in pairs(workspace:GetDescendants()) do
         if obj:IsA("ParticleEmitter") or obj:IsA("PointLight") or obj:IsA("SpotLight") or obj:IsA("SurfaceLight") then
             obj:Destroy()
@@ -192,8 +199,7 @@ task.delay(45, hopToServer)
 task.spawn(function()
     while true do
         task.wait(5)
-        local totalPlayers = #Players:GetPlayers()
-        if totalPlayers <= 10 then
+        if #Players:GetPlayers() <= 10 then
             hopToServer()
             return
         end
