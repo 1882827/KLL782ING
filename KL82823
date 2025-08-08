@@ -7,6 +7,7 @@ local RunService = game:GetService("RunService")
 
 local placeId = game.PlaceId
 local ServerHopCooldown = false
+local MIN_PLAYERS = 10
 local excludedNames = {
     ["Nii_OZ"] = false,
     ["VTBR_VoaPassarinho8"] = false,
@@ -18,22 +19,30 @@ TeleportService.TeleportInitFailed:Connect(function(_, _, _)
     end)
 end)
 
-local function find18PlayerServer()
+local function findBestServer()
     local cursor = nil
+    local bestServer = nil
+    local MIN_OCCUPANCY = 0.8
+
     repeat
         local url = string.format(
             "https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Desc&limit=100%s",
             placeId,
-            cursor and "&cursor="..cursor or ""
+            cursor and "&cursor=" .. cursor or ""
         )
+
         local success, result = pcall(function()
             return HttpService:JSONDecode(game:HttpGet(url))
         end)
+
         if success and result and result.data then
             for _, server in ipairs(result.data) do
-                if server.id ~= game.JobId and server.maxPlayers == 20 then
-                    if server.playing == 18 then
-                        return server.id
+                if server.id ~= game.JobId and server.playing < server.maxPlayers then
+                    local occupancy = server.playing / server.maxPlayers
+                    if occupancy >= MIN_OCCUPANCY then
+                        if not bestServer or server.playing > bestServer.playing then
+                            bestServer = server
+                        end
                     end
                 end
             end
@@ -42,25 +51,25 @@ local function find18PlayerServer()
             break
         end
     until not cursor
+
+    return bestServer and bestServer.id or nil
 end
 
 local function hopToServer()
     if ServerHopCooldown then return end
     ServerHopCooldown = true
     task.spawn(function()
-        local targetServer = find18PlayerServer()
-        if not targetServer then
-            ServerHopCooldown = false
-            return
-        end
-        local success = pcall(function()
+        local targetServer
+        repeat
+            targetServer = findBestServer()
+            if not targetServer then
+                task.wait(3)
+            end
+        until targetServer
+
+        pcall(function()
             TeleportService:TeleportToPlaceInstance(placeId, targetServer, LocalPlayer)
         end)
-        if not success then
-            task.delay(3, function()
-                ServerHopCooldown = false
-            end)
-        end
     end)
 end
 
@@ -173,13 +182,13 @@ task.spawn(function()
     end
 end)
 
-task.delay(20, function()
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= LocalPlayer and not excludedNames[p.DisplayName] and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-            return
+task.spawn(function()
+    while true do
+        task.wait(5)
+        if #Players:GetPlayers() < MIN_PLAYERS then
+            hopToServer()
         end
     end
-    hopToServer()
 end)
 
 task.spawn(function()
@@ -188,20 +197,9 @@ task.spawn(function()
         for _, p in ipairs(Players:GetPlayers()) do
             if p ~= LocalPlayer and excludedNames[p.DisplayName] == false then
                 hopToServer()
-                return
             end
         end
     end
 end)
 
 task.delay(45, hopToServer)
-
-task.spawn(function()
-    while true do
-        task.wait(5)
-        if #Players:GetPlayers() <= 10 then
-            hopToServer()
-            return
-        end
-    end
-end)
