@@ -19,26 +19,15 @@ TeleportService.TeleportInitFailed:Connect(function()
     end)
 end)
 
-local function serverIsValid(serverId)
-    local url = string.format("https://games.roblox.com/v1/games/%d/servers/Public?serverId=%s", placeId, serverId)
-    local success, result = pcall(function()
-        return HttpService:JSONDecode(game:HttpGet(url))
-    end)
-    return success and result and result.playing and result.playing < result.maxPlayers
-end
-
-local function findBestServer()
+local function findBestServer(minOccupancy)
     local cursor = nil
     local bestServer = nil
-    local MIN_OCCUPANCY = 0.8
-
     repeat
         local url = string.format(
             "https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Desc&limit=100%s",
             placeId,
             cursor and "&cursor=" .. cursor or ""
         )
-
         local success, result = pcall(function()
             return HttpService:JSONDecode(game:HttpGet(url))
         end)
@@ -47,7 +36,7 @@ local function findBestServer()
             for _, server in ipairs(result.data) do
                 if server.id ~= game.JobId and server.playing < server.maxPlayers then
                     local occupancy = server.playing / server.maxPlayers
-                    if occupancy >= MIN_OCCUPANCY then
+                    if occupancy >= (minOccupancy or 0) then
                         if not bestServer or server.playing > bestServer.playing then
                             bestServer = server
                         end
@@ -59,22 +48,20 @@ local function findBestServer()
             break
         end
     until not cursor
-
     return bestServer and bestServer.id or nil
 end
 
-local function hopToServer()
+local function hopToServer(mode)
     if ServerHopCooldown then return end
     ServerHopCooldown = true
+
     task.spawn(function()
         local delayTime = 3
         while true do
+            local minOcc = mode == "death" and 0.8 or 0
             local targetServer
             repeat
-                targetServer = findBestServer()
-                if targetServer and not serverIsValid(targetServer) then
-                    targetServer = nil
-                end
+                targetServer = findBestServer(minOcc)
                 if not targetServer then
                     task.wait(2)
                 end
@@ -85,7 +72,6 @@ local function hopToServer()
             end)
 
             if not success then
-                warn("[ServerHop] Teleport failed:", err)
                 task.wait(delayTime)
                 delayTime = math.min(delayTime * 2, 60)
             else
@@ -105,7 +91,9 @@ waitForStats()
 local function setupDiedListener(character)
     local hum = character:FindFirstChildOfClass("Humanoid")
     if hum then
-        hum.Died:Connect(hopToServer)
+        hum.Died:Connect(function()
+            hopToServer("death")
+        end)
     end
 end
 if LocalPlayer.Character then setupDiedListener(LocalPlayer.Character) end
@@ -209,7 +197,7 @@ task.spawn(function()
     while true do
         task.wait(5)
         if #Players:GetPlayers() < MIN_PLAYERS then
-            hopToServer()
+            hopToServer("lowplayers")
         end
     end
 end)
@@ -219,10 +207,12 @@ task.spawn(function()
         task.wait(2)
         for _, p in ipairs(Players:GetPlayers()) do
             if p ~= LocalPlayer and excludedNames[p.DisplayName] == false then
-                hopToServer()
+                hopToServer("enemy")
             end
         end
     end
 end)
 
-task.delay(45, hopToServer)
+task.delay(45, function()
+    hopToServer("initial")
+end)
