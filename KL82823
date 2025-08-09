@@ -13,11 +13,19 @@ local excludedNames = {
     ["VTBR_VoaPassarinho8"] = false,
 }
 
-TeleportService.TeleportInitFailed:Connect(function(_, _, _)
+TeleportService.TeleportInitFailed:Connect(function()
     task.delay(3, function()
         ServerHopCooldown = false
     end)
 end)
+
+local function serverIsValid(serverId)
+    local url = string.format("https://games.roblox.com/v1/games/%d/servers/Public?serverId=%s", placeId, serverId)
+    local success, result = pcall(function()
+        return HttpService:JSONDecode(game:HttpGet(url))
+    end)
+    return success and result and result.playing and result.playing < result.maxPlayers
+end
 
 local function findBestServer()
     local cursor = nil
@@ -59,17 +67,32 @@ local function hopToServer()
     if ServerHopCooldown then return end
     ServerHopCooldown = true
     task.spawn(function()
-        local targetServer
-        repeat
-            targetServer = findBestServer()
-            if not targetServer then
-                task.wait(3)
-            end
-        until targetServer
+        local delayTime = 3
+        while true do
+            local targetServer
+            repeat
+                targetServer = findBestServer()
+                if targetServer and not serverIsValid(targetServer) then
+                    targetServer = nil
+                end
+                if not targetServer then
+                    task.wait(2)
+                end
+            until targetServer
 
-        pcall(function()
-            TeleportService:TeleportToPlaceInstance(placeId, targetServer, LocalPlayer)
-        end)
+            local success, err = pcall(function()
+                TeleportService:TeleportToPlaceInstance(placeId, targetServer, LocalPlayer)
+            end)
+
+            if not success then
+                warn("[ServerHop] Teleport failed:", err)
+                task.wait(delayTime)
+                delayTime = math.min(delayTime * 2, 60)
+            else
+                break
+            end
+        end
+        ServerHopCooldown = false
     end)
 end
 
