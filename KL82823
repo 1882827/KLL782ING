@@ -7,11 +7,14 @@ local RunService = game:GetService("RunService")
 
 local placeId = game.PlaceId
 local ServerHopCooldown = false
-local MIN_PLAYERS = 15
+local MIN_PLAYERS = 10
 local excludedNames = {
     ["Nii_OZ"] = false,
     ["VTBR_VoaPassarinho8"] = false,
 }
+
+local visitedServers = {}
+visitedServers[game.JobId] = true
 
 local function findBestServer(minOccupancy)
     local cursor = nil
@@ -28,7 +31,7 @@ local function findBestServer(minOccupancy)
 
         if success and result and result.data then
             for _, server in ipairs(result.data) do
-                if server.id ~= game.JobId and server.playing < server.maxPlayers then
+                if not visitedServers[server.id] and server.playing < server.maxPlayers then
                     if server.playing >= MIN_PLAYERS then
                         local occupancy = server.playing / server.maxPlayers
                         if occupancy >= (minOccupancy or 0) then
@@ -55,16 +58,17 @@ local function hopToServer(mode)
         local delayTime = 3
         while true do
             local minOcc = mode == "death" and 0.8 or 0
-            local targetServer
+            local targetServer = findBestServer(minOcc)
 
-            repeat
-                targetServer = findBestServer(minOcc)
-                if not targetServer then
-                    task.wait(2)
-                end
-            until targetServer
+            if not targetServer then
+                ServerHopCooldown = false
+                task.wait(2)
+                return
+            end
 
-            local success, err = pcall(function()
+            visitedServers[targetServer] = true
+
+            local success = pcall(function()
                 TeleportService:TeleportToPlaceInstance(placeId, targetServer, LocalPlayer)
             end)
 
