@@ -7,17 +7,11 @@ local RunService = game:GetService("RunService")
 
 local placeId = game.PlaceId
 local ServerHopCooldown = false
-local MIN_PLAYERS = 10
+local MIN_PLAYERS = 15
 local excludedNames = {
     ["Nii_OZ"] = false,
     ["VTBR_VoaPassarinho8"] = false,
 }
-
-TeleportService.TeleportInitFailed:Connect(function()
-    task.delay(3, function()
-        ServerHopCooldown = false
-    end)
-end)
 
 local function findBestServer(minOccupancy)
     local cursor = nil
@@ -35,10 +29,12 @@ local function findBestServer(minOccupancy)
         if success and result and result.data then
             for _, server in ipairs(result.data) do
                 if server.id ~= game.JobId and server.playing < server.maxPlayers then
-                    local occupancy = server.playing / server.maxPlayers
-                    if occupancy >= (minOccupancy or 0) then
-                        if not bestServer or server.playing > bestServer.playing then
-                            bestServer = server
+                    if server.playing >= MIN_PLAYERS then
+                        local occupancy = server.playing / server.maxPlayers
+                        if occupancy >= (minOccupancy or 0) then
+                            if not bestServer or server.playing > bestServer.playing then
+                                bestServer = server
+                            end
                         end
                     end
                 end
@@ -60,6 +56,7 @@ local function hopToServer(mode)
         while true do
             local minOcc = mode == "death" and 0.8 or 0
             local targetServer
+
             repeat
                 targetServer = findBestServer(minOcc)
                 if not targetServer then
@@ -71,11 +68,11 @@ local function hopToServer(mode)
                 TeleportService:TeleportToPlaceInstance(placeId, targetServer, LocalPlayer)
             end)
 
-            if not success then
+            if success then
+                break
+            else
                 task.wait(delayTime)
                 delayTime = math.min(delayTime * 2, 60)
-            else
-                break
             end
         end
         ServerHopCooldown = false
