@@ -117,11 +117,11 @@ task.spawn(function()
         if hum and tool then
             if tool.Parent ~= char then
                 hum:EquipTool(tool)
-                task.wait(0.05)
+                task.wait(0.01)
             end
             pcall(function()
                 tool:Activate()
-                task.wait(0.2)
+                task.wait(0.01)
             end)
         end
     end
@@ -142,7 +142,7 @@ task.spawn(function()
                 local tRoot = tChar and tChar:FindFirstChild("HumanoidRootPart")
                 if strength and tRoot and strength < durability * 6.5 and tRoot.Anchored == false then
                     tRoot.CFrame = root.CFrame * CFrame.new(math.random(-5, 5), 0, math.random(-5, 5))
-                    task.wait(0.1)
+                    task.wait(0.02)
                 end
             end
         end
