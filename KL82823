@@ -119,7 +119,10 @@ task.spawn(function()
                 hum:EquipTool(tool)
                 task.wait(0.05)
             end
-            pcall(function() tool:Activate() end)
+            pcall(function()
+                tool:Activate()
+                task.wait(0.2)
+            end)
         end
     end
 end)
@@ -139,21 +142,10 @@ task.spawn(function()
                 local tRoot = tChar and tChar:FindFirstChild("HumanoidRootPart")
                 if strength and tRoot and strength < durability * 6.5 and tRoot.Anchored == false then
                     tRoot.CFrame = root.CFrame * CFrame.new(math.random(-5, 5), 0, math.random(-5, 5))
+                    task.wait(0.1)
                 end
             end
         end
-    end
-end)
-
-local lastPos
-_G.lockPosition = true
-RunService.Heartbeat:Connect(function()
-    local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-    if _G.lockPosition and root then
-        lastPos = lastPos or root.Position
-        root.Velocity = Vector3.zero
-        root.RotVelocity = Vector3.zero
-        root.CFrame = CFrame.new(lastPos)
     end
 end)
 
