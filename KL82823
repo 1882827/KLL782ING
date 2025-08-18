@@ -120,10 +120,15 @@ local function killPlayer(player)
     local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
 
     if hum and hum.Health > 0 and root and myRoot then
-        root.CFrame = myRoot.CFrame * CFrame.new(0, 0, -2)
-        pcall(function()
-            LocalPlayer.muscleEvent:FireServer("punch", "rightHand")
-            LocalPlayer.muscleEvent:FireServer("punch", "leftHand")
+        root.CFrame = myRoot.CFrame * CFrame.new(math.random(-3,3), 0, math.random(-3,3))
+        task.spawn(function()
+            for i = 1,3 do
+                pcall(function()
+                    LocalPlayer.muscleEvent:FireServer("punch", "rightHand")
+                    LocalPlayer.muscleEvent:FireServer("punch", "leftHand")
+                end)
+                task.wait(0.05)
+            end
         end)
     end
 end
@@ -202,7 +207,6 @@ LocalPlayer.CharacterAdded:Connect(function()
     task.wait(1)
     setupAnimationBlocking()
 end)
-
 
 task.spawn(function()
     while true do
