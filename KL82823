@@ -4,6 +4,7 @@ local TeleportService = game:GetService("TeleportService")
 local HttpService = game:GetService("HttpService")
 local Lighting = game:GetService("Lighting")
 local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local placeId = game.PlaceId
 local ServerHopCooldown = false
@@ -109,19 +110,24 @@ end)
 
 task.spawn(function()
     while true do
-        task.wait()
+        task.wait(0.01)
+        pcall(function()
+            ReplicatedStorage.rEvents.changeSpeedSizeRemote:InvokeServer("changeSize", 0/0)
+        end)
+
         local char = LocalPlayer.Character
         local Backpack = LocalPlayer:FindFirstChild("Backpack")
         local hum = char and char:FindFirstChildOfClass("Humanoid")
         local tool = (char and char:FindFirstChild("Punch")) or (Backpack and Backpack:FindFirstChild("Punch"))
+
         if hum and tool then
             if tool.Parent ~= char then
                 hum:EquipTool(tool)
-                task.wait(0.01)
             end
             pcall(function()
                 tool:Activate()
-                task.wait(0.01)
+                LocalPlayer.muscleEvent:FireServer("punch", "rightHand")
+                LocalPlayer.muscleEvent:FireServer("punch", "leftHand")
             end)
         end
     end
