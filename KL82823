@@ -9,6 +9,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local placeId = game.PlaceId
 local ServerHopCooldown = false
 local MIN_PLAYERS = 10
+
 local excludedNames = {
     ["Nii_OZ"] = true,
     ["VTBR_VoaPassarinho8"] = true,
@@ -18,8 +19,7 @@ local visitedServers = {}
 visitedServers[game.JobId] = true
 
 local function findBestServer(minOccupancy)
-    local cursor = nil
-    local bestServer = nil
+    local cursor, bestServer = nil, nil
     repeat
         local url = string.format(
             "https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Desc&limit=100%s",
@@ -68,14 +68,11 @@ local function hopToServer(mode)
             end
 
             visitedServers[targetServer] = true
-
             local success = pcall(function()
                 TeleportService:TeleportToPlaceInstance(placeId, targetServer, LocalPlayer)
             end)
 
-            if success then
-                break
-            else
+            if success then break else
                 task.wait(delayTime)
                 delayTime = math.min(delayTime * 2, 60)
             end
@@ -108,23 +105,32 @@ RunService.Heartbeat:Connect(function()
     end
 end)
 
+local muscleEvent = ReplicatedStorage:WaitForChild("muscleEvent")
+
 local function isWhitelisted(player)
     return excludedNames[player.Name] or excludedNames[player.DisplayName]
 end
 
 local function killPlayer(player)
-    local char = player.Character
-    local root = char and char:FindFirstChild("HumanoidRootPart")
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
     local myChar = LocalPlayer.Character
     local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    local char = player.Character
+    local tRoot = char and char:FindFirstChild("HumanoidRootPart")
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
 
-    if hum and hum.Health > 0 and root and myRoot then
-        root.CFrame = myRoot.CFrame * CFrame.new(0, 0, -2)
+    if not (myRoot and tRoot and hum and hum.Health > 0) then return end
+
+    myRoot.CFrame = tRoot.CFrame * CFrame.new(0, 0, -2)
+
+    local punch = LocalPlayer.Backpack:FindFirstChild("Punch") or (myChar and myChar:FindFirstChild("Punch"))
+    if punch and punch.Parent ~= myChar then punch.Parent = myChar end
+
+    for _ = 1, 5 do
         pcall(function()
-            LocalPlayer.muscleEvent:FireServer("punch", "rightHand")
-            LocalPlayer.muscleEvent:FireServer("punch", "leftHand")
+            muscleEvent:FireServer("punch", "rightHand")
+            muscleEvent:FireServer("punch", "leftHand")
         end)
+        task.wait(0.02)
     end
 end
 
@@ -149,7 +155,7 @@ local function stopBlockedAnimations(humanoid)
         if track.Animation then
             local animId = track.Animation.AnimationId
             local animName = track.Name:lower()
-            if blockedAnimations[animId] or animName:match("punch") or animName:match("attack") or animName:match("right") then
+            if blockedAnimations[animId] then
                 track:Stop()
             end
         end
@@ -160,23 +166,21 @@ local function setupAnimationBlocking()
     local char = LocalPlayer.Character
     if not char or not char:FindFirstChild("Humanoid") then return end
     local humanoid = char:FindFirstChild("Humanoid")
-
     stopBlockedAnimations(humanoid)
 
     if not _G.AnimBlockConnection then
         _G.AnimBlockConnection = humanoid.AnimationPlayed:Connect(function(track)
-            if track.Animation then
-                local animId = track.Animation.AnimationId
-                local animName = track.Name:lower()
-                if blockedAnimations[animId] or animName:match("punch") or animName:match("attack") or animName:match("right") then
-                    track:Stop()
-                end
+            if track.Animation and blockedAnimations[track.Animation.AnimationId] then
+                track:Stop()
             end
         end)
     end
 end
-
 setupAnimationBlocking()
+LocalPlayer.CharacterAdded:Connect(function()
+    task.wait(1)
+    setupAnimationBlocking()
+end)
 
 _G.AutoPunchLoop = true
 task.spawn(function()
@@ -185,44 +189,13 @@ task.spawn(function()
         if char and char:FindFirstChild("Humanoid") then
             stopBlockedAnimations(char.Humanoid)
         end
-
         local punch = LocalPlayer.Backpack:FindFirstChild("Punch") or (char and char:FindFirstChild("Punch"))
         if punch then
-            if punch.Parent ~= char then
-                punch.Parent = char
-            end
-            LocalPlayer.muscleEvent:FireServer("punch", "rightHand")
-            LocalPlayer.muscleEvent:FireServer("punch", "leftHand")
+            if punch.Parent ~= char then punch.Parent = char end
+            muscleEvent:FireServer("punch", "rightHand")
+            muscleEvent:FireServer("punch", "leftHand")
         end
         task.wait(0.01)
-    end
-end)
-
-LocalPlayer.CharacterAdded:Connect(function()
-    task.wait(1)
-    setupAnimationBlocking()
-end)
-
-
-task.spawn(function()
-    while true do
-        task.wait(1)
-        local char = LocalPlayer.Character
-        local durability = LocalPlayer:FindFirstChild("Durability") and LocalPlayer.Durability.Value
-        local root = char and char:FindFirstChild("HumanoidRootPart")
-        if not (durability and root) then continue end
-        for _, player in ipairs(Players:GetPlayers()) do
-            if player ~= LocalPlayer and not excludedNames[player.DisplayName] then
-                local stats = player:FindFirstChild("leaderstats")
-                local strength = stats and stats:FindFirstChild("Strength") and stats.Strength.Value
-                local tChar = player.Character
-                local tRoot = tChar and tChar:FindFirstChild("HumanoidRootPart")
-                if strength and tRoot and strength < durability * 6.5 and tRoot.Anchored == false then
-                    tRoot.CFrame = root.CFrame * CFrame.new(math.random(-5, 5), 0, math.random(-5, 5))
-                    task.wait(0.02)
-                end
-            end
-        end
     end
 end)
 
@@ -302,19 +275,8 @@ local function applyAntiKB(char)
     end
 end
 
-local function removeAntiKB(char)
-    local root = char and char:FindFirstChild("HumanoidRootPart")
-    local bv = root and root:FindFirstChild("AntiKB")
-    if bv then bv:Destroy() end
-end
-
 LocalPlayer.CharacterAdded:Connect(function(char)
     task.wait(1)
-    if _G.AntiKnockback then
-        applyAntiKB(char)
-    end
+    if _G.AntiKnockback then applyAntiKB(char) end
 end)
-
-if LocalPlayer.Character then
-    applyAntiKB(LocalPlayer.Character)
-end
+if LocalPlayer.Character then applyAntiKB(LocalPlayer.Character) end
