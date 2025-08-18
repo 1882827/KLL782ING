@@ -10,21 +10,35 @@ local excludedNames = {
 }
 
 local placeId = game.PlaceId
+local MIN_PLAYERS = 10
+local PRIORITY_PLAYERS = 17
+local MAX_TIME_IN_SERVER = 30
 
-local function find18Or19PlayerServer()
+local joinTime = tick()
+
+local function findBetterServer()
     local cursor = nil
+    local fallbackServer = nil
+
     repeat
         local url = "https://games.roblox.com/v1/games/"..placeId.."/servers/Public?sortOrder=Desc&limit=100"
         if cursor then
             url = url.."&cursor="..cursor
         end
+
         local success, response = pcall(function()
             return HttpService:JSONDecode(game:HttpGet(url))
         end)
+
         if success and response and response.data then
             for _, server in ipairs(response.data) do
-                if (server.playing == 18) and server.maxPlayers == 20 and server.id ~= game.JobId then
-                    return server.id
+                local playing = server.playing
+                if playing >= MIN_PLAYERS and playing < server.maxPlayers and server.id ~= game.JobId then
+                    if playing >= PRIORITY_PLAYERS then
+                        return server.id
+                    elseif not fallbackServer then
+                        fallbackServer = server.id
+                    end
                 end
             end
             cursor = response.nextPageCursor
@@ -32,25 +46,32 @@ local function find18Or19PlayerServer()
             break
         end
     until not cursor
-    return nil
+
+    return fallbackServer
 end
 
 local function hopToServer()
-    task.spawn(function()
-        while true do
-            local serverId = find18Or19PlayerServer()
-            if serverId then
-                local success = pcall(function()
-                    TeleportService:TeleportToPlaceInstance(placeId, serverId, LocalPlayer)
-                end)
-                if success then break end
-            end
-            task.wait(1)
-        end
-    end)
+    local serverId = findBetterServer()
+    if serverId then
+        pcall(function()
+            TeleportService:TeleportToPlaceInstance(placeId, serverId, LocalPlayer)
+        end)
+    end
 end
 
-task.delay(48, hopToServer)
+task.spawn(function()
+    while true do
+        task.wait(5)
+        if tick() - joinTime > MAX_TIME_IN_SERVER then
+            hopToServer()
+            break
+        end
+        if #Players:GetPlayers() < MIN_PLAYERS then
+            hopToServer()
+            break
+        end
+    end
+end)
 
 local function setupDiedListener(character)
     local hum = character:FindFirstChildOfClass("Humanoid")
@@ -68,7 +89,6 @@ end
 if LocalPlayer.Character then
     setupDiedListener(LocalPlayer.Character)
 end
-
 LocalPlayer.CharacterAdded:Connect(setupDiedListener)
 
 task.spawn(function()
@@ -121,7 +141,6 @@ end)
 task.spawn(function()
     while true do
         task.wait(0.1)
-
         local Backpack = LocalPlayer:FindFirstChild("Backpack")
         local Character = LocalPlayer.Character
         local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
