@@ -3,322 +3,208 @@ local LocalPlayer = Players.LocalPlayer
 local TeleportService = game:GetService("TeleportService")
 local HttpService = game:GetService("HttpService")
 local Lighting = game:GetService("Lighting")
-local RunService = game:GetService("RunService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local placeId = game.PlaceId
-local ServerHopCooldown = false
-local MIN_PLAYERS = 10
 local excludedNames = {
-    ["Nii_OZ"] = true,
-    ["VTBR_VoaPassarinho8"] = true,
+    ["Nii_OZ"] = false,
+    ["VTBR_VoaPassarinho8"] = false,
 }
 
-local visitedServers = {}
-visitedServers[game.JobId] = true
+local placeId = game.PlaceId
 
-local function findBestServer(minOccupancy)
+local function find18Or19PlayerServer()
     local cursor = nil
-    local bestServer = nil
     repeat
-        local url = string.format(
-            "https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Desc&limit=100%s",
-            placeId,
-            cursor and "&cursor=" .. cursor or ""
-        )
-        local success, result = pcall(function()
+        local url = "https://games.roblox.com/v1/games/"..placeId.."/servers/Public?sortOrder=Desc&limit=100"
+        if cursor then
+            url = url.."&cursor="..cursor
+        end
+        local success, response = pcall(function()
             return HttpService:JSONDecode(game:HttpGet(url))
         end)
-
-        if success and result and result.data then
-            for _, server in ipairs(result.data) do
-                if not visitedServers[server.id] and server.playing < server.maxPlayers then
-                    if server.playing >= MIN_PLAYERS then
-                        local occupancy = server.playing / server.maxPlayers
-                        if occupancy >= (minOccupancy or 0) then
-                            if not bestServer or server.playing > bestServer.playing then
-                                bestServer = server
-                            end
-                        end
-                    end
+        if success and response and response.data then
+            for _, server in ipairs(response.data) do
+                if (server.playing == 18) and server.maxPlayers == 20 and server.id ~= game.JobId then
+                    return server.id
                 end
             end
-            cursor = result.nextPageCursor
+            cursor = response.nextPageCursor
         else
             break
         end
     until not cursor
-    return bestServer and bestServer.id or nil
+    return nil
 end
 
-local function hopToServer(mode)
-    if ServerHopCooldown then return end
-    ServerHopCooldown = true
-
-    task.spawn(function()
-        local delayTime = 3
-        while true do
-            local minOcc = mode == "death" and 0.8 or 0
-            local targetServer = findBestServer(minOcc)
-
-            if not targetServer then
-                ServerHopCooldown = false
-                task.wait(2)
-                return
-            end
-
-            visitedServers[targetServer] = true
-
-            local success = pcall(function()
-                TeleportService:TeleportToPlaceInstance(placeId, targetServer, LocalPlayer)
-            end)
-
-            if success then
-                break
-            else
-                task.wait(delayTime)
-                delayTime = math.min(delayTime * 2, 60)
-            end
-        end
-        ServerHopCooldown = false
-    end)
+local function hopToServer()
+    local serverId = find18Or19PlayerServer()
+    if serverId then
+        TeleportService:TeleportToPlaceInstance(placeId, serverId, LocalPlayer)
+    else
+        task.delay(1, hopToServer)
+    end
 end
 
-local function waitForStats()
-    repeat task.wait() until LocalPlayer:FindFirstChild("Durability")
-    repeat task.wait() until LocalPlayer:FindFirstChild("leaderstats")
-end
-waitForStats()
+task.delay(48, hopToServer)
 
 local function setupDiedListener(character)
     local hum = character:FindFirstChildOfClass("Humanoid")
     if hum then
-        hum.Died:Connect(function()
-            hopToServer("death")
+        hum.Died:Connect(hopToServer)
+    else
+        character.ChildAdded:Connect(function(child)
+            if child:IsA("Humanoid") then
+                child.Died:Connect(hopToServer)
+            end
         end)
     end
 end
-if LocalPlayer.Character then setupDiedListener(LocalPlayer.Character) end
+
+if LocalPlayer.Character then
+    setupDiedListener(LocalPlayer.Character)
+end
+
 LocalPlayer.CharacterAdded:Connect(setupDiedListener)
-
-RunService.Heartbeat:Connect(function()
-    local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-    if hum and hum.Health < hum.MaxHealth then
-        hum.Health = hum.MaxHealth
-    end
-end)
-
-local function isWhitelisted(player)
-    return excludedNames[player.Name] or excludedNames[player.DisplayName]
-end
-
-local function killPlayer(player)
-    local char = player.Character
-    local root = char and char:FindFirstChild("HumanoidRootPart")
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
-    local myChar = LocalPlayer.Character
-    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
-
-    if hum and hum.Health > 0 and root and myRoot then
-        root.CFrame = myRoot.CFrame * CFrame.new(math.random(-3,3), 0, math.random(-3,3))
-        task.spawn(function()
-            for i = 1,3 do
-                pcall(function()
-                    LocalPlayer.muscleEvent:FireServer("punch", "rightHand")
-                    LocalPlayer.muscleEvent:FireServer("punch", "leftHand")
-                end)
-                task.wait(0.05)
-            end
-        end)
-    end
-end
-
-_G.killAll = true
-RunService.Heartbeat:Connect(function()
-    if _G.killAll then
-        for _, player in ipairs(Players:GetPlayers()) do
-            if player ~= LocalPlayer and not isWhitelisted(player) then
-                killPlayer(player)
-            end
-        end
-    end
-end)
-
-local blockedAnimations = {
-    ["rbxassetid://3638729053"] = true,
-    ["rbxassetid://3638767427"] = true,
-}
-
-local function stopBlockedAnimations(humanoid)
-    for _, track in pairs(humanoid:GetPlayingAnimationTracks()) do
-        if track.Animation then
-            local animId = track.Animation.AnimationId
-            local animName = track.Name:lower()
-            if blockedAnimations[animId] or animName:match("punch") or animName:match("attack") or animName:match("right") then
-                track:Stop()
-            end
-        end
-    end
-end
-
-local function setupAnimationBlocking()
-    local char = LocalPlayer.Character
-    if not char or not char:FindFirstChild("Humanoid") then return end
-    local humanoid = char:FindFirstChild("Humanoid")
-
-    stopBlockedAnimations(humanoid)
-
-    if not _G.AnimBlockConnection then
-        _G.AnimBlockConnection = humanoid.AnimationPlayed:Connect(function(track)
-            if track.Animation then
-                local animId = track.Animation.AnimationId
-                local animName = track.Name:lower()
-                if blockedAnimations[animId] or animName:match("punch") or animName:match("attack") or animName:match("right") then
-                    track:Stop()
-                end
-            end
-        end)
-    end
-end
-
-setupAnimationBlocking()
-
-_G.AutoPunchLoop = true
-task.spawn(function()
-    while _G.AutoPunchLoop do
-        local char = LocalPlayer.Character
-        if char and char:FindFirstChild("Humanoid") then
-            stopBlockedAnimations(char.Humanoid)
-        end
-
-        local punch = LocalPlayer.Backpack:FindFirstChild("Punch") or (char and char:FindFirstChild("Punch"))
-        if punch then
-            if punch.Parent ~= char then
-                punch.Parent = char
-            end
-            LocalPlayer.muscleEvent:FireServer("punch", "rightHand")
-            LocalPlayer.muscleEvent:FireServer("punch", "leftHand")
-        end
-        task.wait(0.01)
-    end
-end)
-
-LocalPlayer.CharacterAdded:Connect(function()
-    task.wait(1)
-    setupAnimationBlocking()
-end)
-
-task.spawn(function()
-    while true do
-        task.wait(1)
-        local char = LocalPlayer.Character
-        local durability = LocalPlayer:FindFirstChild("Durability") and LocalPlayer.Durability.Value
-        local root = char and char:FindFirstChild("HumanoidRootPart")
-        if not (durability and root) then continue end
-        for _, player in ipairs(Players:GetPlayers()) do
-            if player ~= LocalPlayer and not excludedNames[player.DisplayName] then
-                local stats = player:FindFirstChild("leaderstats")
-                local strength = stats and stats:FindFirstChild("Strength") and stats.Strength.Value
-                local tChar = player.Character
-                local tRoot = tChar and tChar:FindFirstChild("HumanoidRootPart")
-                if strength and tRoot and strength < durability * 6.5 and tRoot.Anchored == false then
-                    tRoot.CFrame = root.CFrame * CFrame.new(math.random(-5, 5), 0, math.random(-5, 5))
-                    task.wait(0.02)
-                end
-            end
-        end
-    end
-end)
-
-task.spawn(function()
-    for _, gui in pairs(LocalPlayer:WaitForChild("PlayerGui"):GetChildren()) do
-        if gui:IsA("ScreenGui") then gui:Destroy() end
-    end
-    for _, v in pairs(Lighting:GetChildren()) do
-        if v:IsA("Sky") then v:Destroy() end
-    end
-    local darkSky = Instance.new("Sky")
-    darkSky.Name = "DarkSky"
-    for _, face in ipairs({"Bk", "Dn", "Ft", "Lf", "Rt", "Up"}) do
-        darkSky["Skybox"..face] = "rbxassetid://0"
-    end
-    darkSky.Parent = Lighting
-    local function applyDark()
-        Lighting.Brightness = 0
-        Lighting.ClockTime = 0
-        Lighting.TimeOfDay = "00:00:00"
-        Lighting.OutdoorAmbient = Color3.new(0, 0, 0)
-        Lighting.Ambient = Color3.new(0, 0, 0)
-        Lighting.FogColor = Color3.new(0, 0, 0)
-        Lighting.FogEnd = 100
-    end
-    applyDark()
-    task.spawn(function()
-        while true do
-            task.wait(5)
-            if not Lighting:FindFirstChild("DarkSky") then darkSky:Clone().Parent = Lighting end
-            applyDark()
-        end
-    end)
-    for _, obj in pairs(workspace:GetDescendants()) do
-        if obj:IsA("ParticleEmitter") or obj:IsA("PointLight") or obj:IsA("SpotLight") or obj:IsA("SurfaceLight") then
-            obj:Destroy()
-        end
-    end
-end)
-
-task.spawn(function()
-    while true do
-        task.wait(5)
-        if #Players:GetPlayers() < MIN_PLAYERS then
-            hopToServer("lowplayers")
-        end
-    end
-end)
 
 task.spawn(function()
     while true do
         task.wait(2)
-        for _, p in ipairs(Players:GetPlayers()) do
-            if p ~= LocalPlayer and excludedNames[p.DisplayName] == false then
-                hopToServer("enemy")
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer and excludedNames[player.DisplayName] ~= nil then
+                hopToServer()
+                return
             end
         end
     end
 end)
 
-task.delay(45, function()
-    hopToServer("initial")
-end)
-
-_G.AntiKnockback = true
-
-local function applyAntiKB(char)
-    if not _G.AntiKnockback then return end
-    local root = char:WaitForChild("HumanoidRootPart", 5)
-    if root and not root:FindFirstChild("AntiKB") then
-        local bv = Instance.new("BodyVelocity")
-        bv.Name = "AntiKB"
-        bv.MaxForce = Vector3.new(1e5, 0, 1e5)
-        bv.Velocity = Vector3.new(0, 0, 0)
-        bv.P = 1250
-        bv.Parent = root
-    end
-end
-
-local function removeAntiKB(char)
-    local root = char and char:FindFirstChild("HumanoidRootPart")
-    local bv = root and root:FindFirstChild("AntiKB")
-    if bv then bv:Destroy() end
-end
-
-LocalPlayer.CharacterAdded:Connect(function(char)
-    task.wait(1)
-    if _G.AntiKnockback then
-        applyAntiKB(char)
+task.spawn(function()
+    while true do
+        task.wait(0.3)
+        local char = LocalPlayer.Character
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        if hum then
+            hum.Health = hum.MaxHealth
+        end
     end
 end)
 
-if LocalPlayer.Character then
-    applyAntiKB(LocalPlayer.Character)
+task.spawn(function()
+    while true do
+        task.wait(0.2)
+        local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        local myDurability = LocalPlayer:FindFirstChild("Durability") and LocalPlayer.Durability.Value
+        if root and myDurability then
+            for _, player in ipairs(Players:GetPlayers()) do
+                if player ~= LocalPlayer 
+                    and not excludedNames[player.DisplayName]
+                    and player.Character 
+                    and player.Character:FindFirstChild("HumanoidRootPart") then
+                    local stats = player:FindFirstChild("leaderstats")
+                    local strength = stats and stats:FindFirstChild("Strength") and stats.Strength.Value
+                    if strength and strength < myDurability * 6.5 then
+                        local targetRoot = player.Character.HumanoidRootPart
+                        local offset = CFrame.new(math.random(-1,1), math.random(0,2), math.random(-1,1))
+                        targetRoot.CFrame = root.CFrame * offset
+                    end
+                end
+            end
+        end
+    end
+end)
+
+task.spawn(function()
+    while true do
+        task.wait(0.1)
+        local Backpack = LocalPlayer:WaitForChild("Backpack")
+        local tool = Backpack:FindFirstChild("Punch")
+        if tool and LocalPlayer.Character then
+            local humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+            if humanoid and tool.Parent ~= LocalPlayer.Character then
+                humanoid:EquipTool(tool)
+            end
+        end
+    end
+end)
+
+task.spawn(function()
+    local Backpack = LocalPlayer:WaitForChild("Backpack")
+    local tool = Backpack:WaitForChild("Punch")
+    repeat task.wait() until LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid")
+    local humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+    humanoid:EquipTool(tool)
+    while true do
+        task.wait(0.1)
+        if tool and tool.Parent == LocalPlayer.Character then
+            tool:Activate()
+        end
+    end
+end)
+
+task.spawn(function()
+    while true do
+        task.wait(0.03)
+        local char = LocalPlayer.Character
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        if root then
+            root.CFrame = root.CFrame * CFrame.Angles(0, math.rad(15), 0)
+        end
+    end
+end)
+
+local function darkenSky()
+    for _, v in pairs(Lighting:GetChildren()) do
+        if v:IsA("Sky") then
+            v:Destroy()
+        end
+    end
+    local darkSky = Instance.new("Sky")
+    darkSky.Name = "DarkSky"
+    darkSky.SkyboxBk = "rbxassetid://0"
+    darkSky.SkyboxDn = "rbxassetid://0"
+    darkSky.SkyboxFt = "rbxassetid://0"
+    darkSky.SkyboxLf = "rbxassetid://0"
+    darkSky.SkyboxRt = "rbxassetid://0"
+    darkSky.SkyboxUp = "rbxassetid://0"
+    darkSky.Parent = Lighting
+    Lighting.Brightness = 0
+    Lighting.ClockTime = 0
+    Lighting.TimeOfDay = "00:00:00"
+    Lighting.OutdoorAmbient = Color3.new(0, 0, 0)
+    Lighting.Ambient = Color3.new(0, 0, 0)
+    Lighting.FogColor = Color3.new(0, 0, 0)
+    Lighting.FogEnd = 100
+    task.spawn(function()
+        while true do
+            task.wait(5)
+            if not Lighting:FindFirstChild("DarkSky") then
+                darkSky:Clone().Parent = Lighting
+            end
+            Lighting.Brightness = 0
+            Lighting.ClockTime = 0
+            Lighting.OutdoorAmbient = Color3.new(0, 0, 0)
+            Lighting.Ambient = Color3.new(0, 0, 0)
+            Lighting.FogColor = Color3.new(0, 0, 0)
+            Lighting.FogEnd = 100
+        end
+    end)
 end
+
+local function removeParticleEffects()
+    for _, obj in pairs(workspace:GetDescendants()) do
+        if obj:IsA("ParticleEmitter") then
+            obj:Destroy()
+        end
+    end
+end
+
+local function removeLightSources()
+    for _, obj in pairs(workspace:GetDescendants()) do
+        if obj:IsA("PointLight") or obj:IsA("SpotLight") or obj:IsA("SurfaceLight") then
+            obj:Destroy()
+        end
+    end
+end
+
+removeParticleEffects()
+removeLightSources()
+darkenSky()
