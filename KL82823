@@ -214,3 +214,17 @@ end
 removeParticleEffects()
 removeLightSources()
 darkenSky()
+
+task.spawn(function()
+    while true do
+        task.wait(0.1)
+        local char = LocalPlayer.Character
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        if root then
+            local pos = root.Position
+            if math.abs(pos.Y) > 500 or math.abs(pos.X) > 10000 or math.abs(pos.Z) > 10000 then
+                root.CFrame = CFrame.new(2, 8, 115)
+            end
+        end
+    end
+end)
