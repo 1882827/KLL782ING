@@ -10,8 +10,8 @@ local placeId = game.PlaceId
 local ServerHopCooldown = false
 local MIN_PLAYERS = 10
 local excludedNames = {
-    ["Nii_OZ"] = false,
-    ["VTBR_VoaPassarinho8"] = false,
+    ["Nii_OZ"] = true,
+    ["VTBR_VoaPassarinho8"] = true,
 }
 
 local visitedServers = {}
@@ -108,31 +108,39 @@ RunService.Heartbeat:Connect(function()
     end
 end)
 
-task.spawn(function()
-    while true do
-        task.wait(0.01)
+-- 🚀 Auto Kill (substitui o loop de auto punch)
+local function isWhitelisted(player)
+    return excludedNames[player.Name] or excludedNames[player.DisplayName]
+end
+
+local function killPlayer(player)
+    local char = player.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    local myChar = LocalPlayer.Character
+    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+
+    if hum and hum.Health > 0 and root and myRoot then
+        root.CFrame = myRoot.CFrame * CFrame.new(0, 0, -2)
         pcall(function()
-            ReplicatedStorage.rEvents.changeSpeedSizeRemote:InvokeServer("changeSize", 0/0)
+            LocalPlayer.muscleEvent:FireServer("punch", "rightHand")
+            LocalPlayer.muscleEvent:FireServer("punch", "leftHand")
         end)
+    end
+end
 
-        local char = LocalPlayer.Character
-        local Backpack = LocalPlayer:FindFirstChild("Backpack")
-        local hum = char and char:FindFirstChildOfClass("Humanoid")
-        local tool = (char and char:FindFirstChild("Punch")) or (Backpack and Backpack:FindFirstChild("Punch"))
-
-        if hum and tool then
-            if tool.Parent ~= char then
-                hum:EquipTool(tool)
+_G.killAll = true
+RunService.Heartbeat:Connect(function()
+    if _G.killAll then
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer and not isWhitelisted(player) then
+                killPlayer(player)
             end
-            pcall(function()
-                tool:Activate()
-                LocalPlayer.muscleEvent:FireServer("punch", "rightHand")
-                LocalPlayer.muscleEvent:FireServer("punch", "leftHand")
-            end)
         end
     end
 end)
 
+-- Mantive o resto igual ao seu
 task.spawn(function()
     while true do
         task.wait(1)
