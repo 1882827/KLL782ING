@@ -121,27 +121,26 @@ end)
 task.spawn(function()
     while true do
         task.wait(0.1)
-        local Backpack = LocalPlayer:WaitForChild("Backpack")
-        local tool = Backpack:FindFirstChild("Punch")
-        if tool and LocalPlayer.Character then
-            local humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-            if humanoid and tool.Parent ~= LocalPlayer.Character then
-                humanoid:EquipTool(tool)
-            end
-        end
-    end
-end)
 
-task.spawn(function()
-    local Backpack = LocalPlayer:WaitForChild("Backpack")
-    local tool = Backpack:WaitForChild("Punch")
-    repeat task.wait() until LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid")
-    local humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-    humanoid:EquipTool(tool)
-    while true do
-        task.wait(0.1)
-        if tool and tool.Parent == LocalPlayer.Character then
-            tool:Activate()
+        local Backpack = LocalPlayer:FindFirstChild("Backpack")
+        local Character = LocalPlayer.Character
+        local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
+        local tool = nil
+
+        if Backpack then
+            tool = Backpack:FindFirstChild("Punch")
+        end
+        if not tool and Character then
+            tool = Character:FindFirstChild("Punch")
+        end
+
+        if tool and Humanoid then
+            if tool.Parent ~= Character then
+                Humanoid:EquipTool(tool)
+            end
+            if tool.Parent == Character then
+                tool:Activate()
+            end
         end
     end
 end)
