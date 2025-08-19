@@ -5,7 +5,7 @@ local RunService = game:GetService("RunService")
 
 getgenv().AutoKillEnabled = true
 getgenv().DebugMode = false
-getgenv().SERVER_HOP_INTERVAL = 43
+getgenv().SERVER_HOP_INTERVAL = 40
 
 local LocalPlayer = Players.LocalPlayer
 local placeId = game.PlaceId
@@ -27,31 +27,38 @@ local function hopServer()
     if hopping then return end
     hopping = true
 
-    local serverId
-    local cursor
-    repeat
-        local url = "https://games.roblox.com/v1/games/" .. placeId .. "/servers/Public?sortOrder=Desc&limit=100"
-        if cursor then url = url .. "&cursor=" .. cursor end
+    local success, err = pcall(function()
+        local serverId
+        local cursor
+        repeat
+            local url = "https://games.roblox.com/v1/games/" .. placeId .. "/servers/Public?sortOrder=Desc&limit=100"
+            if cursor then url = url .. "&cursor=" .. cursor end
 
-        local success, response = pcall(function()
-            return HttpService:JSONDecode(game:HttpGet(url))
-        end)
+            local apiSuccess, response = pcall(function()
+                return HttpService:JSONDecode(game:HttpGet(url))
+            end)
 
-        if success and response and response.data then
-            for _, server in ipairs(response.data) do
-                if server.id ~= game.JobId then
-                    serverId = server.id
-                    break
+            if apiSuccess and response and response.data then
+                for _, server in ipairs(response.data) do
+                    if server.id ~= game.JobId and server.playing < server.maxPlayers then
+                        serverId = server.id
+                        break
+                    end
                 end
+                cursor = response.nextPageCursor
             end
-            cursor = response.nextPageCursor
-        end
-    until serverId or not cursor
+        until serverId or not cursor
 
-    if serverId then
-        pcall(function()
+        if serverId then
+            log("Tentando teleportar para o servidor: " .. serverId)
             TeleportService:TeleportToPlaceInstance(placeId, serverId, LocalPlayer)
-        end)
+        else
+            log("Nenhum servidor adequado encontrado, tentando novamente...")
+        end
+    end)
+
+    if not success then
+        log("Erro durante o server hop: " .. tostring(err))
     end
 
     hopping = false
@@ -103,13 +110,16 @@ end
 
 task.spawn(function()
     while task.wait(SERVER_HOP_INTERVAL) and AutoKillEnabled do
-        hopServer()
+        local success, err = pcall(hopServer)
+        if not success then
+            log("Erro no agendamento do server hop: " .. tostring(err))
+        end
     end
 end)
 
 task.spawn(function()
     while task.wait(0.1) and AutoKillEnabled do
-        autoAttack()
+        pcall(autoAttack)
     end
 end)
 
@@ -117,4 +127,12 @@ task.spawn(autoEquip)
 
 RunService.Heartbeat:Connect(function()
     lastAction = tick()
+end)
+
+LocalPlayer.OnTeleport:Connect(function(status)
+    if status == Enum.TeleportState.Failed then
+        log("Teleporte falhou, tentando novamente...")
+        task.wait(5) -- Espera um pouco antes de tentar novamente
+        hopServer()
+    end
 end)
