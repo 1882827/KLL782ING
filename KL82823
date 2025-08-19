@@ -55,16 +55,18 @@ local function hopToServer()
         if not success then
             task.wait(3)
             hopping = false
-            hopToServer()
-        else
-            serverJoinTime = tick()
-            lastAction = tick()
+            return hopToServer()
         end
     else
         task.wait(5)
         hopping = false
-        hopToServer()
+        return hopToServer()
     end
+    hopping = false
+end
+
+local function safeHopToServer()
+    pcall(hopToServer)
 end
 
 local function attackSelectedPlayers()
@@ -129,7 +131,7 @@ task.spawn(function()
         if not AutoKillEnabled then continue end
         
         if tick() - serverJoinTime >= SERVER_HOP_INTERVAL and not hopping then
-            hopToServer()
+            safeHopToServer()
         end
     end
 end)
@@ -149,7 +151,7 @@ task.spawn(function()
         if not AutoKillEnabled then continue end
         
         if tick() - lastAction > 30 and not hopping then
-            hopToServer()
+            safeHopToServer()
         end
     end
 end)
@@ -159,14 +161,14 @@ local function setupDiedListener(character)
     if hum then
         hum.Died:Connect(function()
             task.wait(2)
-            hopToServer()
+            safeHopToServer()
         end)
     else
         character.ChildAdded:Connect(function(child)
             if child:IsA("Humanoid") then
                 child.Died:Connect(function()
                     task.wait(2)
-                    hopToServer()
+                    safeHopToServer()
                 end)
             end
         end)
@@ -189,7 +191,7 @@ task.spawn(function()
         task.wait(5)
         for _, player in ipairs(Players:GetPlayers()) do
             if player ~= LocalPlayer and player.Name == "Nii_OZ" then
-                hopToServer()
+                safeHopToServer()
                 break
             end
         end
@@ -250,9 +252,11 @@ connection = LocalPlayer.OnTeleport:Connect(function(status)
         lastAction = tick()
     elseif status == Enum.TeleportState.Failed then
         task.wait(3)
-        hopToServer()
+        safeHopToServer()
     end
 end)
 
 serverJoinTime = tick()
 lastAction = tick()
+
+print("Auto Kill System loaded successfully!")
