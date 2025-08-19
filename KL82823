@@ -49,17 +49,22 @@ local function hopToServer()
     
     local serverId = find18Or19PlayerServer()
     if serverId then
-        local success = pcall(function()
+        local success, err = pcall(function()
             TeleportService:TeleportToPlaceInstance(placeId, serverId, LocalPlayer)
         end)
-        if success then
+        if not success then
+            task.wait(3)
+            hopping = false
+            hopToServer()
+        else
             serverJoinTime = tick()
             lastAction = tick()
-        else
-            task.wait(3)
         end
+    else
+        task.wait(5)
+        hopping = false
+        hopToServer()
     end
-    hopping = false
 end
 
 local function attackSelectedPlayers()
@@ -122,6 +127,7 @@ task.spawn(function()
     while true do
         task.wait(1)
         if not AutoKillEnabled then continue end
+        
         if tick() - serverJoinTime >= SERVER_HOP_INTERVAL and not hopping then
             hopToServer()
         end
@@ -141,6 +147,7 @@ task.spawn(autoEquip)
 task.spawn(function()
     while task.wait(3) do
         if not AutoKillEnabled then continue end
+        
         if tick() - lastAction > 30 and not hopping then
             hopToServer()
         end
