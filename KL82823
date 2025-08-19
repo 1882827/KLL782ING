@@ -2,11 +2,7 @@ local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local TeleportService = game:GetService("TeleportService")
 local HttpService = game:GetService("HttpService")
-
-local excludedNames = {
-    ["Nii_OZ"] = false,
-    ["VTBR_VoaPassarinho8"] = false,
-}
+local RunService = game:GetService("RunService")
 
 getgenv().AutoKillEnabled = true
 getgenv().DebugMode = false
@@ -20,17 +16,26 @@ local serverJoinTime = tick()
 local connection
 local rightHand, rightArm
 
+local excludedNames = {
+    ["Nii_OZ"] = true,
+    ["VTBR_VoaPassarinho8"] = true,
+}
+
 local function find18Or19PlayerServer()
     local cursor = nil
     repeat
         local url = "https://games.roblox.com/v1/games/"..placeId.."/servers/Public?sortOrder=Desc&limit=100"
-        if cursor then url = url.."&cursor="..cursor end
+        if cursor then 
+            url = url.."&cursor="..cursor 
+        end
         local success, response = pcall(function()
             return HttpService:JSONDecode(game:HttpGet(url))
         end)
         if success and response and response.data then
             for _, server in ipairs(response.data) do
-                if (server.playing == 18 or server.playing == 19) and server.maxPlayers == 20 and server.id ~= game.JobId then
+                if (server.playing == 18 or server.playing == 19) and 
+                   server.maxPlayers == 20 and 
+                   server.id ~= game.JobId then
                     return server.id
                 end
             end
@@ -45,118 +50,100 @@ end
 local function hopToServer()
     if hopping then return end
     hopping = true
-    while true do
-        local serverId = find18Or19PlayerServer()
-        if serverId then
-            local success = pcall(function()
-                TeleportService:TeleportToPlaceInstance(placeId, serverId, LocalPlayer)
-            end)
-            if success then
-                serverJoinTime = tick()
-                lastAction = tick()
-                hopping = false
-                return
-            else
-                task.wait(3)
+    local serverId = find18Or19PlayerServer()
+    if serverId then
+        local success, err = pcall(function()
+            TeleportService:TeleportToPlaceInstance(placeId, serverId, LocalPlayer)
+        end)
+        if success then
+            serverJoinTime = tick()
+            lastAction = tick()
+            if DebugMode then
+                warn("Servidor encontrado! Teleportando...")
             end
         else
-            task.wait(5)
+            if DebugMode then
+                warn("Erro ao teleportar: " .. err)
+            end
+        end
+    else
+        if DebugMode then
+            warn("Nenhum servidor adequado encontrado.")
         end
     end
+    hopping = false
 end
 
 local function autoAttack()
     if not AutoKillEnabled or hopping then return end
     local character = LocalPlayer.Character
     if not character then return end
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if not humanoid or humanoid.Health <= 0 then return end
     if not rightHand then
-        rightHand = character:FindFirstChild("RightHand")
-        rightArm = character:FindFirstChild("Right Arm")
+        rightHand = character:FindFirstChild("RightHand") or character:FindFirstChild("Right Arm")
     end
-    local hand = rightHand or rightArm
+    local hand = rightHand
     if not hand then return end
+    local punchTool = character:FindFirstChild("Punch") or LocalPlayer.Backpack:FindFirstChild("Punch")
+    if not punchTool then return end
+    if punchTool.Parent ~= character then
+        punchTool.Parent = character
+        task.wait(0.1)
+    end
     for _, target in ipairs(Players:GetPlayers()) do
-        if target ~= LocalPlayer and not excludedNames[target.DisplayName] and target.Character then
+        if target ~= LocalPlayer and not excludedNames[target.Name] and target.Character then
             local targetHumanoid = target.Character:FindFirstChildOfClass("Humanoid")
             local root = target.Character:FindFirstChild("HumanoidRootPart")
             if targetHumanoid and targetHumanoid.Health > 0 and root then
-                pcall(function()
-                    firetouchinterest(hand, root, 0)
-                    task.wait(0.02)
-                    firetouchinterest(hand, root, 1)
-                    lastAction = tick()
-                end)
+                local distance = (character.HumanoidRootPart.Position - root.Position).Magnitude
+                if distance < 15 then
+                    pcall(function()
+                        if punchTool:IsA("Tool") then
+                            punchTool:Activate()
+                        end
+                        firetouchinterest(hand, root, 0)
+                        task.wait(0.05)
+                        firetouchinterest(hand, root, 1)
+                        lastAction = tick()
+                        if DebugMode then
+                            print("Atacando: " .. target.Name)
+                        end
+                    end)
+                end
             end
         end
     end
 end
 
 local function autoEquip()
-    while task.wait(0.1) and AutoKillEnabled do
-        if hopping then continue end
-        pcall(function()
-            local char = LocalPlayer.Character
-            if not char then return end
-            local backpack = LocalPlayer.Backpack
-            if not backpack then return end
-            for _, itemName in ipairs({"Protein Egg", "Punch"}) do
-                local item = backpack:FindFirstChild(itemName) or char:FindFirstChild(itemName)
-                if item and item.Parent ~= char then
-                    item.Parent = char
-                end
-                if itemName == "Punch" and item and item:IsA("Tool") then
-                    item:Activate()
-                    lastAction = tick()
-                end
-            end
-        end)
-    end
+    if hopping then return end
+    pcall(function()
+        local char = LocalPlayer.Character
+        if not char then return end
+        local backpack = LocalPlayer.Backpack
+        if not backpack then return end
+        local punch = backpack:FindFirstChild("Punch")
+        if punch and punch:IsA("Tool") then
+            punch.Parent = char
+        end
+        local proteinEgg = backpack:FindFirstChild("Protein Egg")
+        if proteinEgg and proteinEgg:IsA("Tool") then
+            proteinEgg.Parent = char
+        end
+    end)
 end
-
-task.spawn(function()
-    while true do
-        task.wait()
-        if not AutoKillEnabled then continue end
-        if tick() - serverJoinTime >= SERVER_HOP_INTERVAL and not hopping then
-            hopToServer()
-        end
-    end
-end)
-
-task.spawn(function()
-    while task.wait(0.05) do
-        if AutoKillEnabled and not hopping then
-            pcall(autoAttack)
-        end
-    end
-end)
-
-task.spawn(autoEquip)
-
-task.spawn(function()
-    while task.wait(3) do
-        if not AutoKillEnabled then continue end
-        if tick() - lastAction > 30 and not hopping then
-            hopToServer()
-        end
-    end
-end)
 
 local function setupDiedListener(character)
-    local hum = character:FindFirstChildOfClass("Humanoid")
+    local hum = character:WaitForChild("Humanoid", 5)
     if hum then
-        hum.Died:Connect(hopToServer)
-    else
-        character.ChildAdded:Connect(function(child)
-            if child:IsA("Humanoid") then
-                child.Died:Connect(hopToServer)
+        hum.Died:Connect(function()
+            if DebugMode then
+                warn("Personagem morreu. Procurando novo servidor...")
             end
+            hopToServer()
         end)
     end
-end
-
-if LocalPlayer.Character then
-    setupDiedListener(LocalPlayer.Character)
 end
 
 LocalPlayer.CharacterAdded:Connect(function(character)
@@ -166,63 +153,45 @@ LocalPlayer.CharacterAdded:Connect(function(character)
     setupDiedListener(character)
 end)
 
-task.spawn(function()
-    while true do
-        task.wait(2)
-        for _, player in ipairs(Players:GetPlayers()) do
-            if player ~= LocalPlayer and player.DisplayName == "Nii_OZ" then
-                hopToServer()
-                return
+if LocalPlayer.Character then
+    setupDiedListener(LocalPlayer.Character)
+end
+
+local function checkForExcludedPlayers()
+    for _, player in ipairs(Players:GetPlayers()) do
+        if excludedNames[player.Name] then
+            if DebugMode then
+                warn("Jogador excluído encontrado: " .. player.Name)
             end
+            hopToServer()
+            return true
         end
     end
-end)
+    return false
+end
 
-task.spawn(function()
-    while true do
-        task.wait(0.3)
-        local char = LocalPlayer.Character
-        local hum = char and char:FindFirstChildOfClass("Humanoid")
-        if hum then
-            hum.Health = hum.MaxHealth
+local heartbeatConnection
+heartbeatConnection = RunService.Heartbeat:Connect(function()
+    if not AutoKillEnabled then return end
+    if tick() - serverJoinTime >= SERVER_HOP_INTERVAL and not hopping then
+        if DebugMode then
+            warn("Intervalo de server hop atingido. Procurando novo servidor...")
         end
+        hopToServer()
+        return
     end
-end)
-
-task.spawn(function()
-    while true do
-        task.wait(0.1)
-        local Backpack = LocalPlayer:WaitForChild("Backpack")
-        local tool = Backpack:FindFirstChild("Punch")
-        if tool and LocalPlayer.Character then
-            local humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-            if humanoid and tool.Parent ~= LocalPlayer.Character then
-                humanoid:EquipTool(tool)
-            end
+    if tick() - lastAction > 30 and not hopping then
+        if DebugMode then
+            warn("Inatividade detectada. Procurando novo servidor...")
         end
+        hopToServer()
+        return
     end
-end)
-
-task.spawn(function()
-    while true do
-        task.wait(0.1)
-        local char = LocalPlayer.Character
-        local tool = char and char:FindFirstChild("Punch")
-        if tool and tool:IsA("Tool") then
-            tool:Activate()
-        end
+    if checkForExcludedPlayers() then
+        return
     end
-end)
-
-task.spawn(function()
-    while true do
-        task.wait(0.03)
-        local char = LocalPlayer.Character
-        local root = char and char:FindFirstChild("HumanoidRootPart")
-        if root then
-            root.CFrame = root.CFrame * CFrame.Angles(0, math.rad(15), 0)
-        end
-    end
+    autoEquip()
+    autoAttack()
 end)
 
 if connection then connection:Disconnect() end
@@ -231,6 +200,9 @@ connection = LocalPlayer.OnTeleport:Connect(function(status)
         serverJoinTime = tick()
         lastAction = tick()
     elseif status == Enum.TeleportState.Failed then
+        if DebugMode then
+            warn("Teleporte falhou. Tentando novamente...")
+        end
         task.wait(3)
         hopToServer()
     end
@@ -238,3 +210,7 @@ end)
 
 serverJoinTime = tick()
 lastAction = tick()
+
+if DebugMode then
+    warn("Script iniciado com sucesso!")
+end
