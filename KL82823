@@ -12,7 +12,7 @@ local excludedNames = {
 local placeId = game.PlaceId
 local MIN_PLAYERS = 10
 local PRIORITY_PLAYERS = 17
-local MAX_TIME_IN_SERVER = 30
+local MAX_TIME_IN_SERVER = 45
 
 local joinTime = tick()
 
@@ -51,12 +51,20 @@ local function findBetterServer()
 end
 
 local function hopToServer()
-    local serverId = findBetterServer()
-    if serverId then
-        pcall(function()
-            TeleportService:TeleportToPlaceInstance(placeId, serverId, LocalPlayer)
-        end)
-    end
+    task.spawn(function()
+        while true do
+            local serverId = findBetterServer()
+            if serverId then
+                local success = pcall(function()
+                    TeleportService:TeleportToPlaceInstance(placeId, serverId, LocalPlayer)
+                end)
+                if success then
+                    break
+                end
+            end
+            task.wait(2)
+        end
+    end)
 end
 
 task.spawn(function()
