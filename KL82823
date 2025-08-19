@@ -1,20 +1,70 @@
 local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
+local RunService = game:GetService("RunService")
 local TeleportService = game:GetService("TeleportService")
-local HttpService = game:GetService("HttpService")
 local Lighting = game:GetService("Lighting")
 
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+getgenv().AutoKillEnabled = true
 local excludedNames = {
     ["Nii_OZ"] = true,
     ["VTBR_VoaPassarinho8"] = true,
 }
-
 local placeId = game.PlaceId
 local MIN_PLAYERS = 10
 local PRIORITY_PLAYERS = 17
-local MAX_TIME_IN_SERVER = 60 -- Aumentado para 60 segundos
-
+local MAX_TIME_IN_SERVER = 60
 local joinTime = tick()
+
+local function getHand()
+    local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+    return char:FindFirstChild("RightHand") or char:FindFirstChild("Right Arm")
+end
+
+local function attackAllPlayers()
+    local hand = getHand()
+    if not hand or not hand:IsDescendantOf(workspace) then return end
+
+    for _, target in pairs(Players:GetPlayers()) do
+        if target ~= LocalPlayer and not excludedNames[target.DisplayName] and target.Character then
+            local root = target.Character:FindFirstChild("HumanoidRootPart")
+            if root and root:IsDescendantOf(workspace) then
+                for _=1,2 do
+                    firetouchinterest(hand, root, 0)
+                    task.wait(0.01)
+                    firetouchinterest(hand, root, 1)
+                end
+            end
+        end
+    end
+end
+
+local function autoEquipPunch()
+    while true do
+        task.wait(0.1)
+        local Backpack = LocalPlayer:FindFirstChild("Backpack")
+        local Character = LocalPlayer.Character
+        local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
+        local tool = nil
+
+        if Backpack then  
+            tool = Backpack:FindFirstChild("Punch")  
+        end  
+        if not tool and Character then  
+            tool = Character:FindFirstChild("Punch")  
+        end  
+
+        if tool and Humanoid then  
+            if tool.Parent ~= Character then  
+                Humanoid:EquipTool(tool)  
+            end  
+            if tool.Parent == Character then  
+                tool:Activate()  
+            end  
+        end  
+    end
+end
 
 local function findBetterServer()
     local cursor = nil
@@ -68,6 +118,15 @@ local function hopToServer()
 end
 
 task.spawn(function()
+    while getgenv().AutoKillEnabled do
+        pcall(attackAllPlayers)
+        task.wait(0.08)
+    end
+end)
+
+task.spawn(autoEquipPunch)
+
+task.spawn(function()
     while true do
         task.wait(1)
         if tick() - joinTime >= MAX_TIME_IN_SERVER then
@@ -101,30 +160,6 @@ LocalPlayer.CharacterAdded:Connect(setupDiedListener)
 
 task.spawn(function()
     while true do
-        task.wait(2)
-        for _, player in ipairs(Players:GetPlayers()) do
-            if player ~= LocalPlayer and excludedNames[player.DisplayName] then
-                hopToServer()
-                joinTime = tick()
-                return
-            end
-        end
-    end
-end)
-
-task.spawn(function()
-    while true do
-        task.wait(0.3)
-        local char = LocalPlayer.Character
-        local hum = char and char:FindFirstChildOfClass("Humanoid")
-        if hum then
-            hum.Health = hum.MaxHealth
-        end
-    end
-end)
-
-task.spawn(function()
-    while true do
         task.wait(0.2)
         local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
         local myDurability = LocalPlayer:FindFirstChild("Durability") and LocalPlayer.Durability.Value
@@ -140,54 +175,11 @@ task.spawn(function()
 
                     if strength and strength < myDurability * 6.5 then  
                         local targetRoot = player.Character.HumanoidRootPart
-                        -- Jogadores são teletransportados até você
                         targetRoot.CFrame = root.CFrame * CFrame.new(0, 0, 2)
-
-                        local tool = LocalPlayer.Character:FindFirstChildOfClass("Tool")  
-                        if tool then  
-                            tool:Activate()  
-                        end  
                     end  
                 end  
             end  
         end  
-    end
-end)
-
-task.spawn(function()
-    while true do
-        task.wait(0.1)
-        local Backpack = LocalPlayer:FindFirstChild("Backpack")
-        local Character = LocalPlayer.Character
-        local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
-        local tool = nil
-
-        if Backpack then  
-            tool = Backpack:FindFirstChild("Punch")  
-        end  
-        if not tool and Character then  
-            tool = Character:FindFirstChild("Punch")  
-        end  
-
-        if tool and Humanoid then  
-            if tool.Parent ~= Character then  
-                Humanoid:EquipTool(tool)  
-            end  
-            if tool.Parent == Character then  
-                tool:Activate()  
-            end  
-        end  
-    end
-end)
-
-task.spawn(function()
-    while true do
-        task.wait(0.03)
-        local char = LocalPlayer.Character
-        local root = char and char:FindFirstChild("HumanoidRootPart")
-        if root then
-            root.CFrame = root.CFrame * CFrame.Angles(0, math.rad(15), 0)
-        end
     end
 end)
 
@@ -213,20 +205,6 @@ local function darkenSky()
     Lighting.Ambient = Color3.new(0, 0, 0)
     Lighting.FogColor = Color3.new(0, 0, 0)
     Lighting.FogEnd = 100
-    task.spawn(function()
-        while true do
-            task.wait(5)
-            if not Lighting:FindFirstChild("DarkSky") then
-                darkSky:Clone().Parent = Lighting
-            end
-            Lighting.Brightness = 0
-            Lighting.ClockTime = 0
-            Lighting.OutdoorAmbient = Color3.new(0, 0, 0)
-            Lighting.Ambient = Color3.new(0, 0, 0)
-            Lighting.FogColor = Color3.new(0, 0, 0)
-            Lighting.FogEnd = 100
-        end
-    end)
 end
 
 local function removeParticleEffects()
