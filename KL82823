@@ -20,6 +20,8 @@ local excludedNames = {
     ["VTBR_VoaPassarinho8"] = true,
 }
 
+local rightHand, rightArm
+
 local function log(message)
     if DebugMode then
         print("🔹 " .. os.date("[%H:%M:%S] ") .. message)
@@ -29,8 +31,6 @@ end
 local function hopServer()
     if hopping then return end
     hopping = true
-    
-    log("Iniciando troca de servidor...")
     
     local function findServer()
         local bestServer
@@ -71,18 +71,15 @@ local function hopServer()
             end)
             
             if success then
-                log("Teleportando para novo servidor (tentativa "..attempt..")")
                 serverJoinTime = tick()
                 lastAction = tick()
                 break
             else
-                log("Tentativa "..attempt.." falhou: "..tostring(err))
                 task.wait(3)
                 serverId = findServer()
             end
         end
     else
-        log("Nenhum servidor adequado encontrado")
         task.wait(5)
         hopServer()
     end
@@ -96,18 +93,23 @@ local function autoAttack()
     local character = LocalPlayer.Character
     if not character then return end
 
-    local hand = character:FindFirstChild("RightHand") or character:FindFirstChild("Right Arm")
+    if not rightHand then
+        rightHand = character:FindFirstChild("RightHand")
+        rightArm = character:FindFirstChild("Right Arm")
+    end
+
+    local hand = rightHand or rightArm
     if not hand then return end
 
     for _, target in ipairs(Players:GetPlayers()) do
         if target ~= LocalPlayer and not excludedNames[target.Name] and target.Character then
-            local humanoid = target.Character:FindFirstChildOfClass("Humanoid")
+            local targetHumanoid = target.Character:FindFirstChildOfClass("Humanoid")
             local root = target.Character:FindFirstChild("HumanoidRootPart")
 
-            if humanoid and humanoid.Health > 0 and root then
+            if targetHumanoid and targetHumanoid.Health > 0 and root then
                 pcall(function()
                     firetouchinterest(hand, root, 0)
-                    task.wait(0.05)
+                    task.wait(0.02)
                     firetouchinterest(hand, root, 1)
                     lastAction = tick()
                 end)
@@ -117,25 +119,26 @@ local function autoAttack()
 end
 
 local function autoEquip()
-    while task.wait(0.2) and AutoKillEnabled do
+    while task.wait(0.1) and AutoKillEnabled do
         if hopping then continue end
         
         pcall(function()
             local char = LocalPlayer.Character
             if not char then return end
 
-            local egg = LocalPlayer.Backpack:FindFirstChild("Protein Egg")
-            if egg then
-                egg.Parent = char
-            end
+            local backpack = LocalPlayer.Backpack
+            if not backpack then return end
 
-            local punch = LocalPlayer.Backpack:FindFirstChild("Punch") or char:FindFirstChild("Punch")
-            if punch then
-                if punch.Parent ~= char then
-                    punch.Parent = char
+            for _, itemName in ipairs({"Protein Egg", "Punch"}) do
+                local item = backpack:FindFirstChild(itemName) or char:FindFirstChild(itemName)
+                if item and item.Parent ~= char then
+                    item.Parent = char
                 end
-                punch:Activate()
-                lastAction = tick()
+                
+                if itemName == "Punch" and item and item:IsA("Tool") then
+                    item:Activate()
+                    lastAction = tick()
+                end
             end
         end)
     end
@@ -148,16 +151,20 @@ task.spawn(function()
         local timeInServer = tick() - serverJoinTime
         
         if timeInServer >= SERVER_HOP_INTERVAL and not hopping then
-            log("Tempo no servidor excedido (" .. math.floor(timeInServer) .. "s), trocando de servidor...")
             hopServer()
         elseif DebugMode and math.floor(timeInServer) % 10 == 0 then
             log("Tempo no servidor: " .. math.floor(timeInServer) .. "s")
+        end
+        
+        local playerCount = #Players:GetPlayers()
+        if playerCount < MIN_PLAYERS and timeInServer > 30 and not hopping then
+            hopServer()
         end
     end
 end)
 
 task.spawn(function()
-    while task.wait(0.1) do
+    while task.wait(0.05) do
         if AutoKillEnabled and not hopping then
             pcall(autoAttack)
         end
@@ -167,14 +174,18 @@ end)
 task.spawn(autoEquip)
 
 task.spawn(function()
-    while task.wait(5) do
+    while task.wait(3) do
         if not AutoKillEnabled then continue end
-        
-        if tick() - lastAction > 60 and not hopping then
-            log("Reconectando por inatividade...")
+        if tick() - lastAction > 30 and not hopping then
             hopServer()
         end
     end
+end)
+
+LocalPlayer.CharacterAdded:Connect(function()
+    rightHand = nil
+    rightArm = nil
+    lastAction = tick()
 end)
 
 if connection then connection:Disconnect() end
@@ -183,13 +194,10 @@ connection = LocalPlayer.OnTeleport:Connect(function(status)
         serverJoinTime = tick()
         lastAction = tick()
     elseif status == Enum.TeleportState.Failed then
-        log("Teleporte falhou, tentando novamente...")
-        task.wait(5)
+        task.wait(3)
         hopServer()
     end
 end)
 
 serverJoinTime = tick()
 lastAction = tick()
-
-log("Sistema iniciado com sucesso!")
