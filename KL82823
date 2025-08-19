@@ -13,7 +13,7 @@ local excludedNames = {
     ["VTBR_VoaPassarinho8"] = true,
 }
 local placeId = game.PlaceId
-local MIN_PLAYERS = 10
+local MIN_PLAYERS = 12
 local PRIORITY_PLAYERS = 17
 local MAX_TIME_IN_SERVER = 45
 local joinTime = tick()
