@@ -47,14 +47,14 @@ local function attackAllPlayers()
     if not AutoKillEnabled then return end
     
     local hand = getHand()
-    if not hand or not hand:IsDescendantOf(workspace) then return end
+    if not hand then return end
     
     for _, target in pairs(Players:GetPlayers()) do
         if target ~= LocalPlayer and not excludedNames[target.Name] and target.Character then
             local humanoid = target.Character:FindFirstChildOfClass("Humanoid")
             local root = target.Character:FindFirstChild("HumanoidRootPart")
             
-            if humanoid and humanoid.Health > 0 and root and root:IsDescendantOf(workspace) then
+            if humanoid and humanoid.Health > 0 and root then
                 pcall(function()
                     firetouchinterest(hand, root, 0)
                     task.wait(0.05)
@@ -66,7 +66,7 @@ local function attackAllPlayers()
 end
 
 local function autoEquipAndPunch()
-    while task.wait(0.1) and AutoKillEnabled do
+    while task.wait(SafeMode and 0.2 or 0.1) do
         pcall(function()
             local Character = LocalPlayer.Character
             if not Character then return end
@@ -91,110 +91,91 @@ local function findBetterServer()
     local cursor = nil
     local bestServer = nil
     
-    repeat  
-        local url = "https://games.roblox.com/v1/games/"..placeId.."/servers/Public?sortOrder=Desc&limit=100"  
-        if cursor then url = url.."&cursor="..cursor end  
+    repeat
+        local url = "https://games.roblox.com/v1/games/"..placeId.."/servers/Public?sortOrder=Desc&limit=100"
+        if cursor then url = url.."&cursor="..cursor end
         
-        local success, response = pcall(function()  
-            return HttpService:JSONDecode(game:HttpGet(url))  
-        end)  
+        local success, response = pcall(function()
+            return HttpService:JSONDecode(game:HttpGet(url))
+        end)
         
-        if success and response and response.data then  
-            for _, server in ipairs(response.data) do  
-                if server.playing >= MIN_PLAYERS and server.playing < server.maxPlayers and server.id ~= game.JobId then  
-                    if server.playing >= PRIORITY_PLAYERS then  
+        if success and response and response.data then
+            for _, server in ipairs(response.data) do
+                if server.playing >= MIN_PLAYERS and server.playing < server.maxPlayers and server.id ~= game.JobId then
+                    if server.playing >= PRIORITY_PLAYERS then
                         return server.id
                     elseif not bestServer or server.playing > bestServer.playing then
                         bestServer = server
                     end
-                end  
-            end  
-            cursor = response.nextPageCursor  
-        else  
-            break  
-        end  
-    until not cursor  
+                end
+            end
+            cursor = response.nextPageCursor
+        else
+            break
+        end
+    until not cursor
     
     return bestServer and bestServer.id
 end
 
 local function hopToServer()
-    if hopping or not AutoKillEnabled then return end
+    if hopping then return end
     hopping = true
     teleportAttempts = teleportAttempts + 1
     
     if teleportAttempts > MAX_TELEPORT_ATTEMPTS then
-        saveLog("Max teleport attempts reached")
         task.delay(TELEPORT_COOLDOWN, resetHoppingState)
         return
     end
     
     local serverId = findBetterServer()
     if serverId then
-        saveLog("Teleporting to server with ID: "..serverId)
-        local success, err = pcall(function()
+        local success = pcall(function()
             TeleportService:TeleportToPlaceInstance(placeId, serverId, LocalPlayer)
         end)
         
         if not success then
-            saveLog("Teleport failed: "..tostring(err))
             task.delay(5, resetHoppingState)
         end
     else
-        saveLog("No suitable server found")
         task.delay(TELEPORT_COOLDOWN, resetHoppingState)
     end
 end
 
 local function checkInactivity()
-    while task.wait(10) and AutoKillEnabled do
+    while task.wait(10) do
         if tick() - lastAction > 300 then
-            saveLog("Inactivity detected - hopping servers")
             hopToServer()
         end
     end
 end
 
-local function checkPlayerCount()
-    while task.wait(5) and AutoKillEnabled do
-        if tick() - joinTime >= MAX_TIME_IN_SERVER then
-            joinTime = tick()
-            saveLog("Max time in server reached - hopping")
-            hopToServer()
-        end
-        
-        if #Players:GetPlayers() < MIN_PLAYERS then
-            saveLog("Player count too low - hopping")
-            hopToServer()
-        end
-    end
-end
-
-local function onCharacterAdded(character)
-    character:WaitForChild("Humanoid").Died:Connect(function()
-        saveLog("Player died - hopping servers")
-        hopToServer()
-    end)
-end
-
-LocalPlayer.CharacterAdded:Connect(onCharacterAdded)
-if LocalPlayer.Character then
-    onCharacterAdded(LocalPlayer.Character)
-end
+LocalPlayer.CharacterAdded:Connect(function(character)
+    character:WaitForChild("Humanoid").Died:Connect(hopToServer)
+end)
 
 task.spawn(function()
-    while AutoKillEnabled do
+    while task.wait(0.1) do
         pcall(attackAllPlayers)
-        task.wait(0.1)
     end
 end)
 
 task.spawn(autoEquipAndPunch)
 task.spawn(checkInactivity)
-task.spawn(checkPlayerCount)
+
+task.spawn(function()
+    while task.wait(5) do
+        if tick() - joinTime >= MAX_TIME_IN_SERVER then
+            joinTime = tick()
+            hopToServer()
+        end
+        
+        if #Players:GetPlayers() < MIN_PLAYERS then
+            hopToServer()
+        end
+    end
+end)
 
 RunService.Heartbeat:Connect(function()
     lastAction = tick()
 end)
-
-saveLog("Auto Farm script initialized successfully")
