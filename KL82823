@@ -12,6 +12,7 @@ local LocalPlayer = Players.LocalPlayer
 local placeId = game.PlaceId
 local hopping = false
 local lastAction = tick()
+local serverJoinTime = tick()
 
 local excludedNames = {
     ["Nii_OZ"] = true,
@@ -27,7 +28,9 @@ end
 local function hopServer()
     if hopping then return end
     hopping = true
-
+    
+    log("Iniciando troca de servidor...")
+    
     local function findServer()
         local bestServer
         local cursor
@@ -66,6 +69,7 @@ local function hopServer()
             end)
             
             if success then
+                log("Teleportando para novo servidor (tentativa "..attempt..")")
                 break
             else
                 log("Tentativa "..attempt.." falhou: "..tostring(err))
@@ -125,8 +129,15 @@ local function autoEquip()
 end
 
 task.spawn(function()
-    while task.wait(SERVER_HOP_INTERVAL) and AutoKillEnabled do
-        hopServer()
+    while task.wait(1) and AutoKillEnabled do
+        local timeInServer = tick() - serverJoinTime
+        
+        if timeInServer >= SERVER_HOP_INTERVAL and not hopping then
+            log("Tempo no servidor excedido (" .. math.floor(timeInServer) .. "s), trocando de servidor...")
+            hopServer()
+        elseif DebugMode and math.floor(timeInServer) % 10 == 0 then  -- Log a cada 10 segundos
+            log("Tempo no servidor: " .. math.floor(timeInServer) .. "s")
+        end
     end
 end)
 
@@ -143,12 +154,16 @@ RunService.Heartbeat:Connect(function()
 end)
 
 LocalPlayer.OnTeleport:Connect(function(status)
-    if status == Enum.TeleportState.Failed then
+    if status == Enum.TeleportState.Started then
+        serverJoinTime = tick()
+    elseif status == Enum.TeleportState.Failed then
         log("Teleporte falhou, tentando novamente...")
         task.wait(5)
         hopServer()
     end
 end)
+
+serverJoinTime = tick()
 
 while task.wait(10) do
     if tick() - lastAction > 60 then
