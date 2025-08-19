@@ -13,8 +13,7 @@ local placeId = game.PlaceId
 local hopping = false
 local lastAction = tick()
 local serverJoinTime = tick()
-local teleportAttempts = 0
-local MAX_TELEPORT_ATTEMPTS = 5
+local connection
 
 local excludedNames = {
     ["Nii_OZ"] = true,
@@ -30,16 +29,20 @@ end
 local function hopServer()
     if hopping then return end
     hopping = true
-    teleportAttempts = 0
+    
+    log("Iniciando troca de servidor...")
+    
     local function findServer()
         local bestServer
         local cursor
         repeat
             local url = "https://games.roblox.com/v1/games/"..placeId.."/servers/Public?sortOrder=Desc&limit=100"
             if cursor then url = url.."&cursor="..cursor end
+
             local apiSuccess, response = pcall(function()
                 return HttpService:JSONDecode(game:HttpGet(url))
             end)
+
             if apiSuccess and response and response.data then
                 for _, server in ipairs(response.data) do
                     if server.id ~= game.JobId and server.playing < server.maxPlayers then
@@ -51,49 +54,62 @@ local function hopServer()
                     end
                 end
                 cursor = response.nextPageCursor
+            else
+                task.wait(2)
             end
         until not cursor
+        
         return bestServer and bestServer.id
     end
-    local function attemptTeleport()
-        teleportAttempts = teleportAttempts + 1
-        if teleportAttempts > MAX_TELEPORT_ATTEMPTS then
-            hopping = false
-            return
-        end
-        local serverId = findServer()
-        if serverId then
+
+    local serverId = findServer()
+    
+    if serverId then
+        for attempt = 1, 5 do
             local success, err = pcall(function()
                 TeleportService:TeleportToPlaceInstance(placeId, serverId, LocalPlayer)
             end)
+            
             if success then
+                log("Teleportando para novo servidor (tentativa "..attempt..")")
                 serverJoinTime = tick()
+                lastAction = tick()
+                break
             else
-                task.delay(3, attemptTeleport)
+                log("Tentativa "..attempt.." falhou: "..tostring(err))
+                task.wait(3)
+                serverId = findServer()
             end
-        else
-            task.delay(10, function()
-                hopping = false
-                hopServer()
-            end)
         end
+    else
+        log("Nenhum servidor adequado encontrado")
+        task.wait(5)
+        hopServer()
     end
-    attemptTeleport()
+
+    hopping = false
 end
 
 local function autoAttack()
-    if not AutoKillEnabled then return end
-    local hand = LocalPlayer.Character and (LocalPlayer.Character:FindFirstChild("RightHand") or LocalPlayer.Character:FindFirstChild("Right Arm"))
+    if not AutoKillEnabled or hopping then return end
+
+    local character = LocalPlayer.Character
+    if not character then return end
+
+    local hand = character:FindFirstChild("RightHand") or character:FindFirstChild("Right Arm")
     if not hand then return end
+
     for _, target in ipairs(Players:GetPlayers()) do
         if target ~= LocalPlayer and not excludedNames[target.Name] and target.Character then
             local humanoid = target.Character:FindFirstChildOfClass("Humanoid")
             local root = target.Character:FindFirstChild("HumanoidRootPart")
+
             if humanoid and humanoid.Health > 0 and root then
                 pcall(function()
                     firetouchinterest(hand, root, 0)
                     task.wait(0.05)
                     firetouchinterest(hand, root, 1)
+                    lastAction = tick()
                 end)
             end
         end
@@ -102,59 +118,78 @@ end
 
 local function autoEquip()
     while task.wait(0.2) and AutoKillEnabled do
+        if hopping then continue end
+        
         pcall(function()
             local char = LocalPlayer.Character
             if not char then return end
+
             local egg = LocalPlayer.Backpack:FindFirstChild("Protein Egg")
             if egg then
                 egg.Parent = char
             end
+
             local punch = LocalPlayer.Backpack:FindFirstChild("Punch") or char:FindFirstChild("Punch")
             if punch then
                 if punch.Parent ~= char then
                     punch.Parent = char
                 end
                 punch:Activate()
+                lastAction = tick()
             end
         end)
     end
 end
 
 task.spawn(function()
-    while task.wait(1) and AutoKillEnabled do
+    while task.wait(1) do
+        if not AutoKillEnabled then continue end
+        
         local timeInServer = tick() - serverJoinTime
+        
         if timeInServer >= SERVER_HOP_INTERVAL and not hopping then
+            log("Tempo no servidor excedido (" .. math.floor(timeInServer) .. "s), trocando de servidor...")
             hopServer()
+        elseif DebugMode and math.floor(timeInServer) % 10 == 0 then
+            log("Tempo no servidor: " .. math.floor(timeInServer) .. "s")
         end
     end
 end)
 
 task.spawn(function()
-    while task.wait(0.1) and AutoKillEnabled do
-        pcall(autoAttack)
+    while task.wait(0.1) do
+        if AutoKillEnabled and not hopping then
+            pcall(autoAttack)
+        end
     end
 end)
 
 task.spawn(autoEquip)
 
-RunService.Heartbeat:Connect(function()
-    lastAction = tick()
+task.spawn(function()
+    while task.wait(5) do
+        if not AutoKillEnabled then continue end
+        
+        if tick() - lastAction > 60 and not hopping then
+            log("Reconectando por inatividade...")
+            hopServer()
+        end
+    end
 end)
 
-LocalPlayer.OnTeleport:Connect(function(status)
+if connection then connection:Disconnect() end
+connection = LocalPlayer.OnTeleport:Connect(function(status)
     if status == Enum.TeleportState.Started then
         serverJoinTime = tick()
-        hopping = false
+        lastAction = tick()
     elseif status == Enum.TeleportState.Failed then
-        task.delay(5, function()
-            hopping = false
-            hopServer()
-        end)
+        log("Teleporte falhou, tentando novamente...")
+        task.wait(5)
+        hopServer()
     end
 end)
 
-while task.wait(10) do
-    if tick() - lastAction > 60 and not hopping then
-        hopServer()
-    end
-end
+serverJoinTime = tick()
+lastAction = tick()
+
+log("Sistema iniciado com sucesso!")
