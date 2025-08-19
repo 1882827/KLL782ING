@@ -69,8 +69,8 @@ end
 
 task.spawn(function()
     while true do
-        task.wait(5)
-        if tick() - joinTime > MAX_TIME_IN_SERVER then
+        task.wait(1)
+        if tick() - joinTime >= MAX_TIME_IN_SERVER then
             hopToServer()
             joinTime = tick()
         end
@@ -134,12 +134,18 @@ task.spawn(function()
                     and not excludedNames[player.DisplayName]
                     and player.Character 
                     and player.Character:FindFirstChild("HumanoidRootPart") then
+
                     local stats = player:FindFirstChild("leaderstats")
                     local strength = stats and stats:FindFirstChild("Strength") and stats.Strength.Value
+
                     if strength and strength < myDurability * 6.5 then
                         local targetRoot = player.Character.HumanoidRootPart
-                        local offset = CFrame.new(math.random(-1,1), math.random(0,2), math.random(-1,1))
-                        targetRoot.CFrame = root.CFrame * offset
+                        root.CFrame = targetRoot.CFrame * CFrame.new(0, 0, 2)
+
+                        local tool = LocalPlayer.Character:FindFirstChildOfClass("Tool")
+                        if tool then
+                            tool:Activate()
+                        end
                     end
                 end
             end
