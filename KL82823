@@ -10,10 +10,7 @@ local excludedNames = {
 }
 
 local placeId = game.PlaceId
-local MIN_PLAYERS = 10
-local PRIORITY_PLAYERS = 17
 local MAX_TIME_IN_SERVER = 30
-
 local joinTime = tick()
 
 local function findBetterServer()
@@ -32,13 +29,8 @@ local function findBetterServer()
 
         if success and response and response.data then
             for _, server in ipairs(response.data) do
-                local playing = server.playing
-                if playing >= MIN_PLAYERS and playing < server.maxPlayers and server.id ~= game.JobId then
-                    if playing >= PRIORITY_PLAYERS then
-                        return server.id
-                    elseif not fallbackServer then
-                        fallbackServer = server.id
-                    end
+                if server.playing < server.maxPlayers and server.id ~= game.JobId then
+                    return server.id
                 end
             end
             cursor = response.nextPageCursor
@@ -62,13 +54,10 @@ end
 task.spawn(function()
     while true do
         task.wait(5)
-        if tick() - joinTime > MAX_TIME_IN_SERVER then
+        local elapsed = tick() - joinTime
+        if elapsed > MAX_TIME_IN_SERVER then
             hopToServer()
-            break
-        end
-        if #Players:GetPlayers() < MIN_PLAYERS then
-            hopToServer()
-            break
+            joinTime = tick()
         end
     end
 end)
