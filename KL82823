@@ -1,23 +1,48 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local TeleportService = game:GetService("TeleportService")
-local Lighting = game:GetService("Lighting")
 local HttpService = game:GetService("HttpService")
-
-local LocalPlayer = Players.LocalPlayer
-local Camera = workspace.CurrentCamera
+local VirtualInput = game:GetService("VirtualInputService")
 
 getgenv().AutoKillEnabled = true
+getgenv().DebugMode = false
+getgenv().SafeMode = true
+
+local LocalPlayer = Players.LocalPlayer
+local placeId = game.PlaceId
+local joinTime = tick()
+local hopping = false
+local teleportAttempts = 0
+local lastAction = tick()
+
+local MIN_PLAYERS = 12
+local PRIORITY_PLAYERS = 17
+local MAX_TIME_IN_SERVER = 45 * 60
+local MAX_TELEPORT_ATTEMPTS = 5
 local excludedNames = {
     ["Nii_OZ"] = true,
     ["VTBR_VoaPassarinho8"] = true,
 }
-local placeId = game.PlaceId
-local MIN_PLAYERS = 12
-local PRIORITY_PLAYERS = 17
-local MAX_TIME_IN_SERVER = 45 * 60
-local joinTime = tick()
-local hopping = false
+
+local function saveLog(message)
+    if DebugMode then
+        print(os.date("[%H:%M:%S] ") .. message)
+    end
+    writefile("AFK_Farm_Log.txt", os.date("[%d/%m/%Y %H:%M:%S] ") .. message .. "\n", true)
+end
+
+local function antiAfk()
+    while true do
+        VirtualInput:SendKeyEvent(true, "Space", false, nil)
+        task.wait(30)
+    end
+end
+
+local function resetHoppingState(delay)
+    task.wait(delay or 5)
+    hopping = false
+    teleportAttempts = 0
+end
 
 local function getHand()
     local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
@@ -70,23 +95,27 @@ end
 local function findBetterServer()
     local cursor = nil
     local fallbackServer = nil
+    local bestServer = nil
+    
     repeat  
         local url = "https://games.roblox.com/v1/games/"..placeId.."/servers/Public?sortOrder=Desc&limit=100"  
         if cursor then  
             url = url.."&cursor="..cursor  
         end  
+        
         local success, response = pcall(function()  
             return HttpService:JSONDecode(game:HttpGet(url))  
         end)  
+        
         if success and response and response.data then  
             for _, server in ipairs(response.data) do  
                 local playing = server.playing  
                 if playing >= MIN_PLAYERS and playing < server.maxPlayers and server.id ~= game.JobId then  
                     if playing >= PRIORITY_PLAYERS then  
-                        return server.id  
-                    elseif not fallbackServer then  
-                        fallbackServer = server.id  
-                    end  
+                        return server.id
+                    elseif not bestServer or playing > bestServer.playing then
+                        bestServer = server
+                    end
                 end  
             end  
             cursor = response.nextPageCursor  
@@ -94,29 +123,63 @@ local function findBetterServer()
             break  
         end  
     until not cursor  
-    return fallbackServer
+    
+    return bestServer and bestServer.id or fallbackServer
 end
 
 local function hopToServer()
     if hopping then return end
     hopping = true
+    teleportAttempts = teleportAttempts + 1
+    
+    if teleportAttempts > MAX_TELEPORT_ATTEMPTS then
+        saveLog("Máximo de tentativas de teleporte atingido. Esperando 1 minuto...")
+        resetHoppingState(60)
+        return
+    end
     
     local serverId = findBetterServer()
     if serverId then
+        saveLog("Tentando teleportar para o servidor: "..serverId)
+        
         local success, err = pcall(function()
             TeleportService:TeleportToPlaceInstance(placeId, serverId, LocalPlayer)
         end)
         
         if not success then
-            warn("Falha ao teleportar: "..tostring(err))
-            task.wait(5)
+            saveLog("Falha ao teleportar: "..tostring(err))
+            task.spawn(function()
+                resetHoppingState(5)
+                if getgenv().AutoKillEnabled then
+                    hopToServer()
+                end
+            end)
+        else
+            task.delay(30, resetHoppingState)
         end
-        
-        hopping = false
     else
-        print("Nenhum servidor adequado encontrado.")
-        hopping = false
+        saveLog("Nenhum servidor adequado encontrado. Tentando novamente em 30 segundos...")
+        resetHoppingState(30)
+    end
+end
+
+local function checkInactivity()
+    while true do
+        if tick() - lastAction > 300 then
+            saveLog("Inatividade detectada - Reiniciando...")
+            hopToServer()
+        end
         task.wait(10)
+    end
+end
+
+local function setupDiedListener(character)
+    local hum = character:WaitForChild("Humanoid", 10)
+    if hum then
+        hum.Died:Connect(function()
+            saveLog("Personagem morreu, trocando de servidor...")
+            hopToServer()
+        end)
     end
 end
 
@@ -128,39 +191,34 @@ task.spawn(function()
 end)
 
 task.spawn(autoEquipAndPunch)
+task.spawn(antiAfk)
+task.spawn(checkInactivity)
+
+if LocalPlayer.Character then
+    setupDiedListener(LocalPlayer.Character)
+end
+LocalPlayer.CharacterAdded:Connect(setupDiedListener)
 
 task.spawn(function()
     while true do
         task.wait(5)
         
         if tick() - joinTime >= MAX_TIME_IN_SERVER then
-            print("Tempo máximo no servidor atingido, trocando...")
+            saveLog("Tempo máximo no servidor atingido, trocando...")
+            joinTime = tick()
             hopToServer()
             task.wait(10)
-            joinTime = tick()
         end
         
         local playerCount = #Players:GetPlayers()
         if playerCount < MIN_PLAYERS then
-            print("Jogadores insuficientes ("..playerCount.."), trocando...")
+            saveLog("Jogadores insuficientes ("..playerCount.."), trocando...")
             hopToServer()
             task.wait(10)
-            joinTime = tick()
         end
     end
 end)
 
-local function setupDiedListener(character)
-    local hum = character:WaitForChild("Humanoid", 10)
-    if hum then
-        hum.Died:Connect(function()
-            print("Personagem morreu, trocando de servidor...")
-            hopToServer()
-        end)
-    end
-end
-
-if LocalPlayer.Character then
-    setupDiedListener(LocalPlayer.Character)
-end
-LocalPlayer.CharacterAdded:Connect(setupDiedListener)
+RunService.Heartbeat:Connect(function()
+    lastAction = tick()
+end)
