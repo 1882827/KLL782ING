@@ -20,19 +20,11 @@ local serverJoinTime = tick()
 local connection
 local rightHand, rightArm
 
-local function log(message)
-    if DebugMode then
-        print("🔹 " .. os.date("[%H:%M:%S] ") .. message)
-    end
-end
-
 local function find18Or19PlayerServer()
     local cursor = nil
     repeat
         local url = "https://games.roblox.com/v1/games/"..placeId.."/servers/Public?sortOrder=Desc&limit=100"
-        if cursor then
-            url = url.."&cursor="..cursor
-        end
+        if cursor then url = url.."&cursor="..cursor end
         local success, response = pcall(function()
             return HttpService:JSONDecode(game:HttpGet(url))
         end)
@@ -53,26 +45,24 @@ end
 local function hopToServer()
     if hopping then return end
     hopping = true
-    local serverId = find18Or19PlayerServer()
-    if serverId then
-        for attempt = 1, 5 do
-            local success, err = pcall(function()
+    while true do
+        local serverId = find18Or19PlayerServer()
+        if serverId then
+            local success = pcall(function()
                 TeleportService:TeleportToPlaceInstance(placeId, serverId, LocalPlayer)
             end)
             if success then
                 serverJoinTime = tick()
                 lastAction = tick()
-                break
+                hopping = false
+                return
             else
                 task.wait(3)
-                serverId = find18Or19PlayerServer()
             end
+        else
+            task.wait(5)
         end
-    else
-        task.wait(5)
-        hopToServer()
     end
-    hopping = false
 end
 
 local function autoAttack()
@@ -124,16 +114,10 @@ local function autoEquip()
 end
 
 task.spawn(function()
-    while task.wait(1) do
+    while true do
+        task.wait()
         if not AutoKillEnabled then continue end
-        local timeInServer = tick() - serverJoinTime
-        if timeInServer >= SERVER_HOP_INTERVAL and not hopping then
-            hopToServer()
-        elseif DebugMode and math.floor(timeInServer) % 10 == 0 then
-            log("Tempo no servidor: " .. math.floor(timeInServer) .. "s")
-        end
-        local playerCount = #Players:GetPlayers()
-        if playerCount < MIN_PLAYERS and timeInServer > 30 and not hopping then
+        if tick() - serverJoinTime >= SERVER_HOP_INTERVAL and not hopping then
             hopToServer()
         end
     end
@@ -161,15 +145,11 @@ end)
 local function setupDiedListener(character)
     local hum = character:FindFirstChildOfClass("Humanoid")
     if hum then
-        hum.Died:Connect(function()
-            hopToServer()
-        end)
+        hum.Died:Connect(hopToServer)
     else
         character.ChildAdded:Connect(function(child)
             if child:IsA("Humanoid") then
-                child.Died:Connect(function()
-                    hopToServer()
-                end)
+                child.Died:Connect(hopToServer)
             end
         end)
     end
@@ -227,11 +207,9 @@ task.spawn(function()
     while true do
         task.wait(0.1)
         local char = LocalPlayer.Character
-        if char then
-            local tool = char:FindFirstChild("Punch")
-            if tool and tool:IsA("Tool") then
-                tool:Activate()
-            end
+        local tool = char and char:FindFirstChild("Punch")
+        if tool and tool:IsA("Tool") then
+            tool:Activate()
         end
     end
 end)
@@ -260,4 +238,3 @@ end)
 
 serverJoinTime = tick()
 lastAction = tick()
-task.delay(48, hopToServer)
