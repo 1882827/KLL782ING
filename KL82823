@@ -106,12 +106,17 @@ local function hopToServer()
         local success, err = pcall(function()
             TeleportService:TeleportToPlaceInstance(placeId, serverId, LocalPlayer)
         end)
+        
         if not success then
             warn("Falha ao teleportar: "..tostring(err))
-            hopping = false
+            task.wait(5)
         end
-    else
+        
         hopping = false
+    else
+        print("Nenhum servidor adequado encontrado.")
+        hopping = false
+        task.wait(10)
     end
 end
 
@@ -131,6 +136,7 @@ task.spawn(function()
         if tick() - joinTime >= MAX_TIME_IN_SERVER then
             print("Tempo máximo no servidor atingido, trocando...")
             hopToServer()
+            task.wait(10)
             joinTime = tick()
         end
         
@@ -138,6 +144,7 @@ task.spawn(function()
         if playerCount < MIN_PLAYERS then
             print("Jogadores insuficientes ("..playerCount.."), trocando...")
             hopToServer()
+            task.wait(10)
             joinTime = tick()
         end
     end
