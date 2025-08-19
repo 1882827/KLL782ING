@@ -15,7 +15,7 @@ local excludedNames = {
 local placeId = game.PlaceId
 local MIN_PLAYERS = 12
 local PRIORITY_PLAYERS = 17
-local MAX_TIME_IN_SERVER = 45 * 60 -- Convertendo para segundos (45 minutos)
+local MAX_TIME_IN_SERVER = 45 * 60
 local joinTime = tick()
 local hopping = false
 
