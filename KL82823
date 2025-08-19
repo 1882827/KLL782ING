@@ -21,7 +21,7 @@ local excludedNames = {
     ["VTBR_VoaPassarinho8"] = true,
 }
 
-local function find18Or19PlayerServer()
+local function findPopulatedServer()
     local cursor = nil
     repeat
         local url = "https://games.roblox.com/v1/games/"..placeId.."/servers/Public?sortOrder=Desc&limit=100"
@@ -31,7 +31,7 @@ local function find18Or19PlayerServer()
         end)
         if success and response and response.data then
             for _, server in ipairs(response.data) do
-                if (server.playing == 18 or server.playing == 19) and server.maxPlayers == 20 and server.id ~= game.JobId then
+                if server.playing >= 15 and server.maxPlayers == 20 and server.id ~= game.JobId then
                     return server.id
                 end
             end
@@ -48,7 +48,7 @@ local function hopToServer()
     hopping = true
 
     while true do
-        local serverId = find18Or19PlayerServer()
+        local serverId = findPopulatedServer()
         if serverId then
             local success = pcall(function()
                 TeleportService:TeleportToPlaceInstance(placeId, serverId, LocalPlayer)
@@ -56,7 +56,7 @@ local function hopToServer()
             if success then break end
         end
         hopping = false
-        task.wait(3)
+        task.wait(2)
         hopping = true
     end
 
@@ -240,7 +240,7 @@ connection = LocalPlayer.OnTeleport:Connect(function(status)
         hopping = false
     elseif status == Enum.TeleportState.Failed then
         hopping = false
-        task.wait(3)
+        task.wait(2)
         safeHopToServer()
     elseif status == Enum.TeleportState.Completed then
         hopping = false
