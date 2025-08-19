@@ -40,27 +40,29 @@ local function attackAllPlayers()
     end
 end
 
-local function autoEquipPunch()
+local function autoEquipAndPunch()
     while true do
         task.wait(0.1)
-        local Backpack = LocalPlayer:FindFirstChild("Backpack")
         local Character = LocalPlayer.Character
-        local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
-        local tool = nil
-        if Backpack then  
-            tool = Backpack:FindFirstChild("Punch")  
-        end  
-        if not tool and Character then  
-            tool = Character:FindFirstChild("Punch")  
-        end  
-        if tool and Humanoid then  
-            if tool.Parent ~= Character then  
-                Humanoid:EquipTool(tool)  
-            end  
-            if tool.Parent == Character then  
-                tool:Activate()  
-            end  
-        end  
+        if not Character then continue end
+        
+        local egg = LocalPlayer.Backpack:FindFirstChild("Protein Egg")
+        if egg then
+            egg.Parent = Character
+        end
+        
+        local punch = LocalPlayer.Backpack:FindFirstChild("Punch") or Character:FindFirstChild("Punch")
+        if punch then
+            if punch.Parent ~= Character then
+                punch.Parent = Character
+            end
+            if LocalPlayer:FindFirstChild("muscleEvent") then
+                LocalPlayer.muscleEvent:FireServer("punch", "rightHand")
+                LocalPlayer.muscleEvent:FireServer("punch", "leftHand")
+            else
+                punch:Activate()
+            end
+        end
     end
 end
 
@@ -118,7 +120,7 @@ task.spawn(function()
     end
 end)
 
-task.spawn(autoEquipPunch)
+task.spawn(autoEquipAndPunch)
 
 task.spawn(function()
     while true do
