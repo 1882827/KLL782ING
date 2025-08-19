@@ -15,8 +15,9 @@ local excludedNames = {
 local placeId = game.PlaceId
 local MIN_PLAYERS = 12
 local PRIORITY_PLAYERS = 17
-local MAX_TIME_IN_SERVER = 45
+local MAX_TIME_IN_SERVER = 45 * 60 -- Convertendo para segundos (45 minutos)
 local joinTime = tick()
+local hopping = false
 
 local function getHand()
     local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
@@ -97,20 +98,21 @@ local function findBetterServer()
 end
 
 local function hopToServer()
-    task.spawn(function()
-        while true do
-            local serverId = findBetterServer()
-            if serverId then
-                local success = pcall(function()
-                    TeleportService:TeleportToPlaceInstance(placeId, serverId, LocalPlayer)
-                end)
-                if success then
-                    break
-                end
-            end
-            task.wait(2)
+    if hopping then return end
+    hopping = true
+    
+    local serverId = findBetterServer()
+    if serverId then
+        local success, err = pcall(function()
+            TeleportService:TeleportToPlaceInstance(placeId, serverId, LocalPlayer)
+        end)
+        if not success then
+            warn("Falha ao teleportar: "..tostring(err))
+            hopping = false
         end
-    end)
+    else
+        hopping = false
+    end
 end
 
 task.spawn(function()
@@ -124,12 +126,17 @@ task.spawn(autoEquipAndPunch)
 
 task.spawn(function()
     while true do
-        task.wait(1)
+        task.wait(5)
+        
         if tick() - joinTime >= MAX_TIME_IN_SERVER then
+            print("Tempo máximo no servidor atingido, trocando...")
             hopToServer()
             joinTime = tick()
         end
-        if #Players:GetPlayers() < MIN_PLAYERS then
+        
+        local playerCount = #Players:GetPlayers()
+        if playerCount < MIN_PLAYERS then
+            print("Jogadores insuficientes ("..playerCount.."), trocando...")
             hopToServer()
             joinTime = tick()
         end
@@ -137,14 +144,11 @@ task.spawn(function()
 end)
 
 local function setupDiedListener(character)
-    local hum = character:FindFirstChildOfClass("Humanoid")
+    local hum = character:WaitForChild("Humanoid", 10)
     if hum then
-        hum.Died:Connect(hopToServer)
-    else
-        character.ChildAdded:Connect(function(child)
-            if child:IsA("Humanoid") then
-                child.Died:Connect(hopToServer)
-            end
+        hum.Died:Connect(function()
+            print("Personagem morreu, trocando de servidor...")
+            hopToServer()
         end)
     end
 end
