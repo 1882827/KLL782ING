@@ -2,6 +2,7 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local TeleportService = game:GetService("TeleportService")
 local Lighting = game:GetService("Lighting")
+local HttpService = game:GetService("HttpService")
 
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
@@ -14,7 +15,7 @@ local excludedNames = {
 local placeId = game.PlaceId
 local MIN_PLAYERS = 10
 local PRIORITY_PLAYERS = 17
-local MAX_TIME_IN_SERVER = 60
+local MAX_TIME_IN_SERVER = 45
 local joinTime = tick()
 
 local function getHand()
@@ -25,7 +26,6 @@ end
 local function attackAllPlayers()
     local hand = getHand()
     if not hand or not hand:IsDescendantOf(workspace) then return end
-
     for _, target in pairs(Players:GetPlayers()) do
         if target ~= LocalPlayer and not excludedNames[target.DisplayName] and target.Character then
             local root = target.Character:FindFirstChild("HumanoidRootPart")
@@ -47,14 +47,12 @@ local function autoEquipPunch()
         local Character = LocalPlayer.Character
         local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
         local tool = nil
-
         if Backpack then  
             tool = Backpack:FindFirstChild("Punch")  
         end  
         if not tool and Character then  
             tool = Character:FindFirstChild("Punch")  
         end  
-
         if tool and Humanoid then  
             if tool.Parent ~= Character then  
                 Humanoid:EquipTool(tool)  
@@ -69,17 +67,14 @@ end
 local function findBetterServer()
     local cursor = nil
     local fallbackServer = nil
-
     repeat  
         local url = "https://games.roblox.com/v1/games/"..placeId.."/servers/Public?sortOrder=Desc&limit=100"  
         if cursor then  
             url = url.."&cursor="..cursor  
         end  
-
         local success, response = pcall(function()  
             return HttpService:JSONDecode(game:HttpGet(url))  
         end)  
-
         if success and response and response.data then  
             for _, server in ipairs(response.data) do  
                 local playing = server.playing  
@@ -96,7 +91,6 @@ local function findBetterServer()
             break  
         end  
     until not cursor  
-
     return fallbackServer
 end
 
@@ -157,86 +151,3 @@ if LocalPlayer.Character then
     setupDiedListener(LocalPlayer.Character)
 end
 LocalPlayer.CharacterAdded:Connect(setupDiedListener)
-
-task.spawn(function()
-    while true do
-        task.wait(0.2)
-        local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-        local myDurability = LocalPlayer:FindFirstChild("Durability") and LocalPlayer.Durability.Value
-        if root and myDurability then
-            for _, player in ipairs(Players:GetPlayers()) do
-                if player ~= LocalPlayer
-                    and not excludedNames[player.DisplayName]
-                    and player.Character
-                    and player.Character:FindFirstChild("HumanoidRootPart") then
-
-                    local stats = player:FindFirstChild("leaderstats")  
-                    local strength = stats and stats:FindFirstChild("Strength") and stats.Strength.Value  
-
-                    if strength and strength < myDurability * 6.5 then  
-                        local targetRoot = player.Character.HumanoidRootPart
-                        targetRoot.CFrame = root.CFrame * CFrame.new(0, 0, 2)
-                    end  
-                end  
-            end  
-        end  
-    end
-end)
-
-local function darkenSky()
-    for _, v in pairs(Lighting:GetChildren()) do
-        if v:IsA("Sky") then
-            v:Destroy()
-        end
-    end
-    local darkSky = Instance.new("Sky")
-    darkSky.Name = "DarkSky"
-    darkSky.SkyboxBk = "rbxassetid://0"
-    darkSky.SkyboxDn = "rbxassetid://0"
-    darkSky.SkyboxFt = "rbxassetid://0"
-    darkSky.SkyboxLf = "rbxassetid://0"
-    darkSky.SkyboxRt = "rbxassetid://0"
-    darkSky.SkyboxUp = "rbxassetid://0"
-    darkSky.Parent = Lighting
-    Lighting.Brightness = 0
-    Lighting.ClockTime = 0
-    Lighting.TimeOfDay = "00:00:00"
-    Lighting.OutdoorAmbient = Color3.new(0, 0, 0)
-    Lighting.Ambient = Color3.new(0, 0, 0)
-    Lighting.FogColor = Color3.new(0, 0, 0)
-    Lighting.FogEnd = 100
-end
-
-local function removeParticleEffects()
-    for _, obj in pairs(workspace:GetDescendants()) do
-        if obj:IsA("ParticleEmitter") then
-            obj:Destroy()
-        end
-    end
-end
-
-local function removeLightSources()
-    for _, obj in pairs(workspace:GetDescendants()) do
-        if obj:IsA("PointLight") or obj:IsA("SpotLight") or obj:IsA("SurfaceLight") then
-            obj:Destroy()
-        end
-    end
-end
-
-removeParticleEffects()
-removeLightSources()
-darkenSky()
-
-task.spawn(function()
-    while true do
-        task.wait(0.1)
-        local char = LocalPlayer.Character
-        local root = char and char:FindFirstChild("HumanoidRootPart")
-        if root then
-            local pos = root.Position
-            if math.abs(pos.Y) > 500 or math.abs(pos.X) > 10000 or math.abs(pos.Z) > 10000 then
-                root.CFrame = CFrame.new(2, 8, 115)
-            end
-        end
-    end
-end)
