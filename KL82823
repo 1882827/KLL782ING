@@ -6,6 +6,7 @@ local RunService = game:GetService("RunService")
 getgenv().AutoKillEnabled = true
 getgenv().DebugMode = false
 getgenv().SERVER_HOP_INTERVAL = 43
+getgenv().MIN_PLAYERS = 10
 
 local LocalPlayer = Players.LocalPlayer
 local placeId = game.PlaceId
@@ -28,7 +29,7 @@ local function hopServer()
     hopping = true
 
     local function findServer()
-        local serverId
+        local bestServer
         local cursor
         repeat
             local url = "https://games.roblox.com/v1/games/"..placeId.."/servers/Public?sortOrder=Desc&limit=100"
@@ -41,14 +42,19 @@ local function hopServer()
             if apiSuccess and response and response.data then
                 for _, server in ipairs(response.data) do
                     if server.id ~= game.JobId and server.playing < server.maxPlayers then
-                        serverId = server.id
-                        break
+                        -- Preferir servidores com mais jogadores (pelo menos MIN_PLAYERS)
+                        if server.playing >= MIN_PLAYERS then
+                            return server.id  -- Retorna imediatamente se encontrar um servidor bom
+                        elseif not bestServer or server.playing > bestServer.playing then
+                            bestServer = server  -- Mantém o melhor servidor encontrado até agora
+                        end
                     end
                 end
                 cursor = response.nextPageCursor
             end
-        until serverId or not cursor
-        return serverId
+        until not cursor
+        
+        return bestServer and bestServer.id
     end
 
     local serverId = findServer()
