@@ -46,22 +46,26 @@ end
 local function hopToServer()
     if hopping then return end
     hopping = true
-    
+
     local serverId = find18Or19PlayerServer()
     if serverId then
         local success, err = pcall(function()
             TeleportService:TeleportToPlaceInstance(placeId, serverId, LocalPlayer)
         end)
+
         if not success then
-            task.wait(3)
             hopping = false
-            return hopToServer()
+            task.wait(3)
+            safeHopToServer()
+            return
         end
     else
-        task.wait(5)
         hopping = false
-        return hopToServer()
+        task.wait(5)
+        safeHopToServer()
+        return
     end
+
     hopping = false
 end
 
@@ -250,13 +254,15 @@ connection = LocalPlayer.OnTeleport:Connect(function(status)
     if status == Enum.TeleportState.Started then
         serverJoinTime = tick()
         lastAction = tick()
+        hopping = false
     elseif status == Enum.TeleportState.Failed then
+        hopping = false
         task.wait(3)
         safeHopToServer()
+    elseif status == Enum.TeleportState.Completed then
+        hopping = false
     end
 end)
 
 serverJoinTime = tick()
 lastAction = tick()
-
-print("Auto Kill System loaded successfully!")
