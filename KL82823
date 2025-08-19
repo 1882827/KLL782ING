@@ -12,7 +12,7 @@ local excludedNames = {
 local placeId = game.PlaceId
 local MIN_PLAYERS = 10
 local PRIORITY_PLAYERS = 17
-local MAX_TIME_IN_SERVER = 45
+local MAX_TIME_IN_SERVER = 60 -- Aumentado para 60 segundos
 
 local joinTime = tick()
 
@@ -20,32 +20,32 @@ local function findBetterServer()
     local cursor = nil
     local fallbackServer = nil
 
-    repeat
-        local url = "https://games.roblox.com/v1/games/"..placeId.."/servers/Public?sortOrder=Desc&limit=100"
-        if cursor then
-            url = url.."&cursor="..cursor
-        end
+    repeat  
+        local url = "https://games.roblox.com/v1/games/"..placeId.."/servers/Public?sortOrder=Desc&limit=100"  
+        if cursor then  
+            url = url.."&cursor="..cursor  
+        end  
 
-        local success, response = pcall(function()
-            return HttpService:JSONDecode(game:HttpGet(url))
-        end)
+        local success, response = pcall(function()  
+            return HttpService:JSONDecode(game:HttpGet(url))  
+        end)  
 
-        if success and response and response.data then
-            for _, server in ipairs(response.data) do
-                local playing = server.playing
-                if playing >= MIN_PLAYERS and playing < server.maxPlayers and server.id ~= game.JobId then
-                    if playing >= PRIORITY_PLAYERS then
-                        return server.id
-                    elseif not fallbackServer then
-                        fallbackServer = server.id
-                    end
-                end
-            end
-            cursor = response.nextPageCursor
-        else
-            break
-        end
-    until not cursor
+        if success and response and response.data then  
+            for _, server in ipairs(response.data) do  
+                local playing = server.playing  
+                if playing >= MIN_PLAYERS and playing < server.maxPlayers and server.id ~= game.JobId then  
+                    if playing >= PRIORITY_PLAYERS then  
+                        return server.id  
+                    elseif not fallbackServer then  
+                        fallbackServer = server.id  
+                    end  
+                end  
+            end  
+            cursor = response.nextPageCursor  
+        else  
+            break  
+        end  
+    until not cursor  
 
     return fallbackServer
 end
@@ -130,26 +130,27 @@ task.spawn(function()
         local myDurability = LocalPlayer:FindFirstChild("Durability") and LocalPlayer.Durability.Value
         if root and myDurability then
             for _, player in ipairs(Players:GetPlayers()) do
-                if player ~= LocalPlayer 
+                if player ~= LocalPlayer
                     and not excludedNames[player.DisplayName]
-                    and player.Character 
+                    and player.Character
                     and player.Character:FindFirstChild("HumanoidRootPart") then
 
-                    local stats = player:FindFirstChild("leaderstats")
-                    local strength = stats and stats:FindFirstChild("Strength") and stats.Strength.Value
+                    local stats = player:FindFirstChild("leaderstats")  
+                    local strength = stats and stats:FindFirstChild("Strength") and stats.Strength.Value  
 
-                    if strength and strength < myDurability * 6.5 then
+                    if strength and strength < myDurability * 6.5 then  
                         local targetRoot = player.Character.HumanoidRootPart
-                        root.CFrame = targetRoot.CFrame * CFrame.new(0, 0, 2)
+                        -- Jogadores são teletransportados até você
+                        targetRoot.CFrame = root.CFrame * CFrame.new(0, 0, 2)
 
-                        local tool = LocalPlayer.Character:FindFirstChildOfClass("Tool")
-                        if tool then
-                            tool:Activate()
-                        end
-                    end
-                end
-            end
-        end
+                        local tool = LocalPlayer.Character:FindFirstChildOfClass("Tool")  
+                        if tool then  
+                            tool:Activate()  
+                        end  
+                    end  
+                end  
+            end  
+        end  
     end
 end)
 
@@ -161,21 +162,21 @@ task.spawn(function()
         local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
         local tool = nil
 
-        if Backpack then
-            tool = Backpack:FindFirstChild("Punch")
-        end
-        if not tool and Character then
-            tool = Character:FindFirstChild("Punch")
-        end
+        if Backpack then  
+            tool = Backpack:FindFirstChild("Punch")  
+        end  
+        if not tool and Character then  
+            tool = Character:FindFirstChild("Punch")  
+        end  
 
-        if tool and Humanoid then
-            if tool.Parent ~= Character then
-                Humanoid:EquipTool(tool)
-            end
-            if tool.Parent == Character then
-                tool:Activate()
-            end
-        end
+        if tool and Humanoid then  
+            if tool.Parent ~= Character then  
+                Humanoid:EquipTool(tool)  
+            end  
+            if tool.Parent == Character then  
+                tool:Activate()  
+            end  
+        end  
     end
 end)
 
