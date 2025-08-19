@@ -13,6 +13,8 @@ local placeId = game.PlaceId
 local hopping = false
 local lastAction = tick()
 local serverJoinTime = tick()
+local teleportAttempts = 0
+local MAX_TELEPORT_ATTEMPTS = 5
 
 local excludedNames = {
     ["Nii_OZ"] = true,
@@ -28,73 +30,65 @@ end
 local function hopServer()
     if hopping then return end
     hopping = true
-    
-    log("Iniciando troca de servidor...")
-    
+    teleportAttempts = 0
     local function findServer()
         local bestServer
         local cursor
         repeat
             local url = "https://games.roblox.com/v1/games/"..placeId.."/servers/Public?sortOrder=Desc&limit=100"
             if cursor then url = url.."&cursor="..cursor end
-
             local apiSuccess, response = pcall(function()
                 return HttpService:JSONDecode(game:HttpGet(url))
             end)
-
             if apiSuccess and response and response.data then
                 for _, server in ipairs(response.data) do
                     if server.id ~= game.JobId and server.playing < server.maxPlayers then
-                        -- Preferir servidores com mais jogadores (pelo menos MIN_PLAYERS)
                         if server.playing >= MIN_PLAYERS then
-                            return server.id  -- Retorna imediatamente se encontrar um servidor bom
+                            return server.id
                         elseif not bestServer or server.playing > bestServer.playing then
-                            bestServer = server  -- Mantém o melhor servidor encontrado até agora
+                            bestServer = server
                         end
                     end
                 end
                 cursor = response.nextPageCursor
             end
         until not cursor
-        
         return bestServer and bestServer.id
     end
-
-    local serverId = findServer()
-    
-    if serverId then
-        for attempt = 1, 5 do
+    local function attemptTeleport()
+        teleportAttempts = teleportAttempts + 1
+        if teleportAttempts > MAX_TELEPORT_ATTEMPTS then
+            hopping = false
+            return
+        end
+        local serverId = findServer()
+        if serverId then
             local success, err = pcall(function()
                 TeleportService:TeleportToPlaceInstance(placeId, serverId, LocalPlayer)
             end)
-            
             if success then
-                log("Teleportando para novo servidor (tentativa "..attempt..")")
-                break
+                serverJoinTime = tick()
             else
-                log("Tentativa "..attempt.." falhou: "..tostring(err))
-                task.wait(3)
-                serverId = findServer()
+                task.delay(3, attemptTeleport)
             end
+        else
+            task.delay(10, function()
+                hopping = false
+                hopServer()
+            end)
         end
-    else
-        log("Nenhum servidor adequado encontrado")
     end
-
-    hopping = false
+    attemptTeleport()
 end
 
 local function autoAttack()
     if not AutoKillEnabled then return end
-
     local hand = LocalPlayer.Character and (LocalPlayer.Character:FindFirstChild("RightHand") or LocalPlayer.Character:FindFirstChild("Right Arm"))
     if not hand then return end
-
     for _, target in ipairs(Players:GetPlayers()) do
         if target ~= LocalPlayer and not excludedNames[target.Name] and target.Character then
             local humanoid = target.Character:FindFirstChildOfClass("Humanoid")
             local root = target.Character:FindFirstChild("HumanoidRootPart")
-
             if humanoid and humanoid.Health > 0 and root then
                 pcall(function()
                     firetouchinterest(hand, root, 0)
@@ -111,12 +105,10 @@ local function autoEquip()
         pcall(function()
             local char = LocalPlayer.Character
             if not char then return end
-
             local egg = LocalPlayer.Backpack:FindFirstChild("Protein Egg")
             if egg then
                 egg.Parent = char
             end
-
             local punch = LocalPlayer.Backpack:FindFirstChild("Punch") or char:FindFirstChild("Punch")
             if punch then
                 if punch.Parent ~= char then
@@ -131,12 +123,8 @@ end
 task.spawn(function()
     while task.wait(1) and AutoKillEnabled do
         local timeInServer = tick() - serverJoinTime
-        
         if timeInServer >= SERVER_HOP_INTERVAL and not hopping then
-            log("Tempo no servidor excedido (" .. math.floor(timeInServer) .. "s), trocando de servidor...")
             hopServer()
-        elseif DebugMode and math.floor(timeInServer) % 10 == 0 then  -- Log a cada 10 segundos
-            log("Tempo no servidor: " .. math.floor(timeInServer) .. "s")
         end
     end
 end)
@@ -156,18 +144,17 @@ end)
 LocalPlayer.OnTeleport:Connect(function(status)
     if status == Enum.TeleportState.Started then
         serverJoinTime = tick()
+        hopping = false
     elseif status == Enum.TeleportState.Failed then
-        log("Teleporte falhou, tentando novamente...")
-        task.wait(5)
-        hopServer()
+        task.delay(5, function()
+            hopping = false
+            hopServer()
+        end)
     end
 end)
 
-serverJoinTime = tick()
-
 while task.wait(10) do
-    if tick() - lastAction > 60 then
-        log("Reconectando...")
+    if tick() - lastAction > 60 and not hopping then
         hopServer()
     end
 end
